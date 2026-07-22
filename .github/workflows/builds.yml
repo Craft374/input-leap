@@ -312,27 +312,8 @@ jobs:
             rpms/**/*.rpm
 
   mac-build:
-    name: ${{ matrix.name}}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-       include:
-         - name: macOS-x86_64
-           os: macos-14
-           qt-version: 5.15
-           min-macOS-version: 10.9
-           arch: 'x86_64'
-         - name: macOS-Universal
-           os: macos-14
-           qt-version: 6.6
-           min-macOS-version: 11
-           arch: 'arm64;x86_64'
-         - name: macOS-Apple_Silicon
-           os: macos-14
-           qt-version: 6.6
-           min-macOS-version: 14
-           arch: 'arm64'
+    name: macOS ARM64
+    runs-on: macos-14
 
     env:
       VERBOSE: 1
@@ -344,40 +325,29 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{matrix.qt-version}}
-          modules: ${{matrix.qt-modules}}
+          version: 6.6
           cache: true
-          cache-key-prefix: macOS-${{matrix.os}}-Qt${{matrix.qt-version}}
+          cache-key-prefix: macOS-macos-14-Qt6.6
 
       - name: Setup the image
         run: |
           brew install ninja
 
-      - name: Cache OpenSSL Universal
+      - name: Cache OpenSSL ARM64
         id: cache-openssl
-        if: matrix.os == 'macos-14'
         uses: actions/cache@v4.2.4
         with:
           path: ${{env.OpenSSL_Install_Path}}
-          key: macOS-${{matrix.os}}-ssl-${{matrix.arch}}-${{env.OpenSSL_Version}}
+          key: macOS-macos-14-ssl-arm64-${{env.OpenSSL_Version}}
 
-      - name: Build OpenSSL Universal
-        if: ((steps.cache-openssl.outputs.cache-hit != 'true') && (matrix.os == 'macos-14'))
+      - name: Build OpenSSL ARM64
+        if: steps.cache-openssl.outputs.cache-hit != 'true'
         run: |
           wget https://github.com/openssl/openssl/releases/download/openssl-${{env.OpenSSL_Version}}/openssl-${{env.OpenSSL_Version}}.tar.gz
           tar -xf openssl-${{env.OpenSSL_Version}}.tar.gz
-          echo "#!/bin/bash
-          if [[ \$* == *-arch\ x86_64* ]] && ! [[ \$* == *-arch\ arm64* ]]; then
-            cc -arch arm64 \$@
-          else
-            cc \$@
-          fi" >> /Users/runner/cc_override
-          chmod a+x /Users/runner/cc_override
-          cat /Users/runner/cc_override
-          export MACOSX_DEPLOYMENT_TARGET=${{matrix.min-macOS-version}}
-          export CC=/Users/runner/cc_override
+          export MACOSX_DEPLOYMENT_TARGET=14
           cd openssl-${{env.OpenSSL_Version}}
-          ./configure no-asm darwin64-x86_64-cc --prefix=${{env.OpenSSL_Install_Path}}
+          CC="cc -arch arm64" ./configure no-asm darwin64-arm64-cc --prefix=${{env.OpenSSL_Install_Path}}
           make
           make install
 
@@ -392,11 +362,11 @@ jobs:
                 -DCMAKE_UNITY_BUILD=1 \
                 -DOpenSSL_ROOT=${{env.OpenSSL_Install_Path}} \
                 -DCMAKE_OSX_SYSROOT=$(xcode-select --print-path)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk \
-                -DCMAKE_OSX_DEPLOYMENT_TARGET=${{matrix.min-macOS-version}} -DCMAKE_UNITY_BUILD=1 \
-                -DQT_DEFAULT_MAJOR_VERSION=$(echo ${{matrix.qt-version}} | cut -c -1) \
+                -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
+                -DQT_DEFAULT_MAJOR_VERSION=6 \
                 -DINPUTLEAP_VERSION_DESC=${{ (env.B_BUILD_TYPE == 'Release') && 'release' || 'git' }} \
-                -DINPUTLEAP_BUILD_GULRAK_FILESYSTEM=${{ matrix.qt-version == '5.15' && '1' || '0' }} \
-                -DCMAKE_OSX_ARCHITECTURES="${{matrix.arch}}"
+                -DINPUTLEAP_BUILD_GULRAK_FILESYSTEM=0 \
+                -DCMAKE_OSX_ARCHITECTURES=arm64
 
       - name: Run the build
         run: |
@@ -405,37 +375,24 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: env.B_BUILD_TYPE == 'Release'
         with:
-          name: ${{ matrix.name }}-installer
+          name: macOS-ARM64-installer
           path: ./build/bundle/*.dmg
           if-no-files-found: error
 
       - name: Archive debug app
         if: env.B_BUILD_TYPE != 'Release'
-        run: tar -czf InputLeap-${{matrix.name}}.tar.gz -C build/bundle InputLeap.app
+        run: tar -czf InputLeap-macOS-ARM64.tar.gz -C build/bundle InputLeap.app
 
       - uses: actions/upload-artifact@v4
         if: env.B_BUILD_TYPE != 'Release'
         with:
-          name: ${{ matrix.name }}-debug
+          name: macOS-ARM64-debug
           path: ./InputLeap*.tar.gz
           if-no-files-found: error
 
   win-build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-       include:
-         - name: Windows Qt5
-           os: windows-2019
-           qt-version: 5.15
-           qt-major: 5
-         - name: Windows Qt6
-           os: windows-2022
-           qt-version: 6.6
-           qt-major: 6
+    name: Windows x86-64
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v4
@@ -458,10 +415,9 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{matrix.qt-version}}
-          modules: ${{matrix.qt-modules}}
+          version: 6.6
           cache: true
-          cache-key-prefix: windows-${{matrix.os}}-Qt${{matrix.qt-version}}
+          cache-key-prefix: windows-windows-2022-Qt6.6
 
       - name: Configure build system
         run: |
@@ -470,13 +426,12 @@ jobs:
           cd build
 
           cmake -S ..\input-leap -G "$env:CMAKE_GEN" -A x64 -D CMAKE_BUILD_TYPE=$B_BUILD_TYPE `
-            -DQT_DEFAULT_MAJOR_VERSION=${{matrix.qt-major}} `
+            -DQT_DEFAULT_MAJOR_VERSION=6 `
             -DINPUTLEAP_VERSION_DESC=${{ (env.B_BUILD_TYPE == 'Release') && 'release' || 'git' }} `
-            -DINPUTLEAP_BUILD_GULRAK_FILESYSTEM=${{ matrix.qt-major == '5' && '1' || '0' }} `
+            -DINPUTLEAP_BUILD_GULRAK_FILESYSTEM=0 `
             -DDNSSD_LIB="$env:BONJOUR_SDK_HOME\Lib\x64\dnssd.lib" -D CMAKE_INSTALL_PREFIX=input-leap-install
         env:
-          VS_PATH: ${{ matrix.os == 'windows-2019' && '%ProgramFiles(x86)%\Microsoft Visual Studio\2019' || '%ProgramFiles%\Microsoft Visual Studio\2022' }}
-          CMAKE_GEN: ${{ matrix.os == 'windows-2019' && 'Visual Studio 16 2019' || 'Visual Studio 17 2022' }}
+          CMAKE_GEN: Visual Studio 17 2022
           BONJOUR_SDK_HOME: ${{ steps.bonjour.outputs.path }}
 
       - name: Run build system
@@ -488,7 +443,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ env.B_BUILD_TYPE }}
+          name: Windows-x86-64-${{ env.B_BUILD_TYPE }}
           path: ${{ env.B_BUILD_TYPE }}.zip
           if-no-files-found: warn
 
@@ -500,7 +455,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: env.B_BUILD_TYPE == 'Release'
         with:
-          name: windows-installer-${{ matrix.name }}
+          name: windows-installer-Windows-x86-64
           path: .\build\installer-inno\bin
           if-no-files-found: error
 

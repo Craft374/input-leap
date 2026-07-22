@@ -47,5 +47,6 @@ export CMAKE_PREFIX_PATH="$qt_root:$openssl_root${CMAKE_PREFIX_PATH:+:$CMAKE_PRE
 export OPENSSL_ROOT_DIR="$openssl_root"
 export B_BUILD_TYPE=Release
 export B_OSX_DEPLOYMENT_TARGET="$(sw_vers -productVersion | awk -F. '{print $1 "." $2}')"
+export B_CMAKE_FLAGS="${B_CMAKE_FLAGS:-} -DCMAKE_OSX_ARCHITECTURES=arm64"
 
 ./clean_build.sh
