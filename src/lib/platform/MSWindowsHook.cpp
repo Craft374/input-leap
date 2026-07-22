@@ -45,6 +45,7 @@ static WindowsHookResource  g_hkMessage;
 static WindowsHookResource  g_hkKeyboard;
 static WindowsHookResource  g_hkMouse;
 static EHookMode        g_mode = kHOOK_DISABLE;
+static bool             g_localCapsLockSuppressed = false;
 static std::uint32_t g_zoneSides = 0;
 static std::int32_t g_zoneSize = 0;
 static std::int32_t g_xScreen = 0;
@@ -98,6 +99,12 @@ void
 MSWindowsHook::setMode(EHookMode mode)
 {
     g_mode = mode;
+}
+
+void
+MSWindowsHook::setLocalCapsLockSuppressed(bool suppressed)
+{
+    g_localCapsLockSuppressed = suppressed;
 }
 
 #if !NO_GRAB_KEYBOARD
@@ -383,6 +390,11 @@ keyboardHookHandler(WPARAM wParam, LPARAM lParam)
         // let certain keys pass through
         switch (wParam) {
         case VK_CAPITAL:
+            if (g_localCapsLockSuppressed) {
+                return true;
+            }
+            break;
+
         case VK_NUMLOCK:
         case VK_SCROLL:
             // pass event on.  we want to let these through to

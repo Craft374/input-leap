@@ -129,6 +129,9 @@ public:
     */
     virtual void setOptions(const OptionsList& options) = 0;
 
+    //! Suppress the local Caps Lock toggle while relaying a remapped key
+    virtual void setLocalCapsLockSuppressed(bool) { }
+
     //! Set clipboard sequence number
     /*!
     Sets the sequence number to use in subsequent clipboard events.

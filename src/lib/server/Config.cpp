@@ -941,8 +941,8 @@ Config::readSectionScreens(ConfigReadContext& s)
 				addOption(screen, kOptionScreenPreserveFocus,
 					s.parseBoolean(value));
 			}
-			else if (name == "reverseMouse") {
-				addOption(screen, kOptionReverseMouse,
+			else if (name == "reverseScroll" || name == "reverseMouse") {
+				addOption(screen, kOptionReverseScroll,
 					s.parseBoolean(value));
 			}
 			else if (name == "keyMap") {
@@ -1406,8 +1406,8 @@ Config::getOptionName(OptionID id)
 	if (id == kOptionRelativeMouseMoves) {
 		return "relativeMouseMoves";
 	}
-	if (id == kOptionReverseMouse) {
-		return "reverseMouse";
+	if (id == kOptionReverseScroll) {
+		return "reverseScroll";
 	}
 	if (id == kOptionWin32KeepForeground) {
 		return "win32KeepForeground";
@@ -1435,7 +1435,7 @@ std::string Config::getOptionValue(OptionID id, OptionValue value)
 		id == kOptionScreenSaverSync ||
 		id == kOptionXTestXineramaUnaware ||
 		id == kOptionRelativeMouseMoves ||
-		id == kOptionReverseMouse ||
+		id == kOptionReverseScroll ||
 		id == kOptionWin32KeepForeground ||
 		id == kOptionScreenPreserveFocus ||
 		id == kOptionClipboardSharing) {

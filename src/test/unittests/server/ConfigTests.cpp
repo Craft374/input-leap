@@ -70,12 +70,14 @@ TEST(ConfigTests, keyMappings_rejectModifiedKeys)
     EXPECT_THROW(input >> config, XConfigRead);
 }
 
-TEST(ConfigTests, screenMouseAndClipboardSizeOptions_roundTrip)
+TEST(ConfigTests, screenScrollAndClipboardSizeOptions_roundTrip)
 {
     std::istringstream input(
         "section: screens\n"
         "\tserver:\n"
         "\tmac:\n"
+        "\t\treverseScroll = true\n"
+        "\tlegacy:\n"
         "\t\treverseMouse = true\n"
         "end\n"
         "section: options\n"
@@ -86,7 +88,8 @@ TEST(ConfigTests, screenMouseAndClipboardSizeOptions_roundTrip)
 
     const auto* macOptions = config.getOptions("mac");
     ASSERT_NE(nullptr, macOptions);
-    EXPECT_EQ(1, macOptions->at(kOptionReverseMouse));
+    EXPECT_EQ(1, macOptions->at(kOptionReverseScroll));
+    EXPECT_EQ(1, config.getOptions("legacy")->at(kOptionReverseScroll));
 
     const auto* globalOptions = config.getOptions("");
     ASSERT_NE(nullptr, globalOptions);
@@ -96,11 +99,13 @@ TEST(ConfigTests, screenMouseAndClipboardSizeOptions_roundTrip)
     output << config;
     EXPECT_NE(std::string::npos,
               output.str().find("clipboardSharingSize = 1048576"));
+    EXPECT_NE(std::string::npos, output.str().find("reverseScroll = true"));
+    EXPECT_EQ(std::string::npos, output.str().find("reverseMouse"));
 
     std::istringstream serialized(output.str());
     Config reparsed;
     serialized >> reparsed;
-    EXPECT_EQ(1, reparsed.getOptions("mac")->at(kOptionReverseMouse));
+    EXPECT_EQ(1, reparsed.getOptions("mac")->at(kOptionReverseScroll));
     EXPECT_EQ(1048576,
               reparsed.getOptions("")->at(kOptionClipboardSharingSize));
 }

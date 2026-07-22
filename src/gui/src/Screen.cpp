@@ -44,7 +44,7 @@ void Screen::init()
     switchCorners().clear();
     fixes().clear();
     keyMappings().clear();
-    setReverseMouse(false);
+    setReverseScroll(false);
     setSwitchCornerSize(0);
 
     // m_Modifiers, m_SwitchCorners and m_Fixes are QLists we use like fixed-size arrays,
@@ -68,7 +68,8 @@ void Screen::loadSettings(QSettings& settings)
         return;
 
     setSwitchCornerSize(settings.value("switchCornerSize").toInt());
-    setReverseMouse(settings.value("reverseMouse", false).toBool());
+    setReverseScroll(settings.value("reverseScroll",
+                                    settings.value("reverseMouse", false)).toBool());
 
     readSettings<QString>(settings, aliases(), "alias", QString(""));
     readSettings<int>(settings, modifiers(), "modifier", Modifier::DefaultMod,
@@ -97,7 +98,8 @@ void Screen::saveSettings(QSettings& settings) const
         return;
 
     settings.setValue("switchCornerSize", switchCornerSize());
-    settings.setValue("reverseMouse", reverseMouse());
+    settings.setValue("reverseScroll", reverseScroll());
+    settings.remove("reverseMouse");
 
     writeSettings<QString>(settings, aliases(), "alias");
     writeSettings<int>(settings, modifiers(), "modifier");
@@ -140,7 +142,7 @@ QTextStream& Screen::writeScreensSection(QTextStream& outStream) const
     outStream << "\n";
 
     outStream << "\t\t" << "switchCornerSize = " << switchCornerSize() << "\n";
-    outStream << "\t\t" << "reverseMouse = " << (reverseMouse() ? "true" : "false") << "\n";
+    outStream << "\t\t" << "reverseScroll = " << (reverseScroll() ? "true" : "false") << "\n";
 
     for (auto mapping = keyMappings().cbegin(); mapping != keyMappings().cend(); ++mapping) {
         outStream << "\t\tkeyMap = " << mapping.key() << " " << mapping.value() << "\n";
@@ -178,7 +180,7 @@ QDataStream& operator<<(QDataStream& outStream, const Screen& screen)
         << screen.switchCorners()
         << screen.fixes()
         << screen.keyMappings()
-        << screen.reverseMouse()
+        << screen.reverseScroll()
         ;
 }
 
@@ -193,7 +195,7 @@ QDataStream& operator>>(QDataStream& inStream, Screen& screen)
         >> screen.m_SwitchCorners
         >> screen.m_Fixes
         >> screen.m_KeyMappings
-        >> screen.m_ReverseMouse
+        >> screen.m_ReverseScroll
         ;
 
     screen.m_Modifiers.clear();

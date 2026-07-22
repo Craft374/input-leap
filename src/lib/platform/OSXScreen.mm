@@ -872,7 +872,7 @@ OSXScreen::setClipboard(ClipboardID, const IClipboard* src)
 {
     if (src != nullptr) {
 		LOG_DEBUG("setting clipboard");
-		Clipboard::copy(&m_pasteboard, src);
+		return Clipboard::copy(&m_pasteboard, src);
 	}
 	return true;
 }

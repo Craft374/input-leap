@@ -185,6 +185,8 @@ public:
     */
     virtual void setOptions(const OptionsList& options);
 
+    virtual void setLocalCapsLockSuppressed(bool suppressed);
+
     //! Set clipboard sequence number
     /*!
     Sets the sequence number to use in subsequent clipboard events.

@@ -485,9 +485,9 @@
     </layout>
    </item>
    <item>
-    <widget class="QCheckBox" name="m_pCheckBoxReverseMouse">
+    <widget class="QCheckBox" name="m_pCheckBoxReverseScroll">
      <property name="text">
-      <string>Reverse mouse movement on this screen</string>
+      <string>Reverse scroll direction on this screen</string>
      </property>
     </widget>
    </item>

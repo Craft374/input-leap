@@ -143,6 +143,9 @@ MainWindow::MainWindow(QSettings& settings, AppConfig& appConfig) :
     setAttribute(Qt::WA_X11NetWmWindowTypeDialog, true);
 
     ui_->setupUi(this);
+#if !defined(Q_OS_MAC)
+    ui_->m_pButtonQuit->hide();
+#endif
     setWindowIcon(QIcon(APP_LARGE_ICON));
     createMenuBar();
     loadSettings();
@@ -344,6 +347,7 @@ void MainWindow::initConnections()
     connect(ui_->m_pActionShowLog, &QAction::triggered, this, &MainWindow::showLogWindow);
     connect(ui_->m_pActionReload, &QAction::triggered, this, &MainWindow::restart_cmd_app);
     connect(ui_->m_pActionQuit, &QAction::triggered, qApp, &QCoreApplication::quit);
+    connect(ui_->m_pButtonQuit, &QPushButton::clicked, ui_->m_pActionQuit, &QAction::trigger);
 }
 
 void MainWindow::saveSettings()

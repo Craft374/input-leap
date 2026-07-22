@@ -34,6 +34,7 @@ public:
     void setZone(std::int32_t x, std::int32_t y, std::int32_t w, std::int32_t h,
                  std::int32_t jumpZoneSize);
     void setMode(EHookMode mode);
+    void setLocalCapsLockSuppressed(bool suppressed);
 
     static bool install();
     static void uninstall();

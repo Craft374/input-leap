@@ -341,6 +341,13 @@
        </spacer>
       </item>
       <item>
+       <widget class="QPushButton" name="m_pButtonQuit">
+        <property name="text">
+         <string>&amp;Quit</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="m_pButtonReload">
         <property name="enabled">
          <bool>false</bool>

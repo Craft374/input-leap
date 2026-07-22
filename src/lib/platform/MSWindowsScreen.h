@@ -117,6 +117,7 @@ public:
     virtual void screensaver(bool activate);
     virtual void resetOptions();
     virtual void setOptions(const OptionsList& options);
+    void setLocalCapsLockSuppressed(bool suppressed) override;
     virtual void setSequenceNumber(std::uint32_t);
     virtual bool isPrimary() const;
     virtual void fakeDraggingFiles(DragFileList fileList);

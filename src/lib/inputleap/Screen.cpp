@@ -310,6 +310,13 @@ Screen::setOptions(const OptionsList& options)
     m_screen->setOptions(options);
 }
 
+void Screen::setLocalCapsLockSuppressed(bool suppressed)
+{
+    if (m_screen != nullptr) {
+        m_screen->setLocalCapsLockSuppressed(suppressed);
+    }
+}
+
 void Screen::setSequenceNumber(std::uint32_t seqNum)
 {
     m_screen->setSequenceNumber(seqNum);

@@ -206,11 +206,8 @@ private:
     // returns the jump zone of the client
     std::int32_t getJumpZoneSize(BaseClientProxy*) const;
 
-    bool isMouseDirectionReversed(const BaseClientProxy*) const;
-    // Mirror coordinates sent to a screen without changing topology coordinates.
-    void transformMousePosition(const BaseClientProxy*, std::int32_t& x,
-                                std::int32_t& y) const;
-    void sendMouseMove(BaseClientProxy*, std::int32_t x, std::int32_t y) const;
+    bool isScrollDirectionReversed(const BaseClientProxy*) const;
+    void updateLocalCapsLockSuppression(const BaseClientProxy*) const;
 
     // change the active screen
     void switchScreen(BaseClientProxy*, std::int32_t x, std::int32_t y, bool forScreenSaver);

@@ -476,6 +476,14 @@ MSWindowsScreen::setOptions(const OptionsList& options)
     m_desks->setOptions(options);
 }
 
+void
+MSWindowsScreen::setLocalCapsLockSuppressed(bool suppressed)
+{
+    if (m_isPrimary) {
+        m_hook.setLocalCapsLockSuppressed(suppressed);
+    }
+}
+
 void MSWindowsScreen::setSequenceNumber(std::uint32_t seqNum)
 {
     m_sequenceNumber = seqNum;
