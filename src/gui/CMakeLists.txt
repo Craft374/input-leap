@@ -193,7 +193,7 @@ add_executable (input-leap WIN32
 include_directories (./src)
 
 target_link_libraries(input-leap
-    synlib
+    keytypes
     net
     arch
     base

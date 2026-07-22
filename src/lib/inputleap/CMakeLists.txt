@@ -17,6 +17,9 @@
 file(GLOB headers "*.h")
 file(GLOB sources "*.cpp")
 
+set(key_types_source "${CMAKE_CURRENT_SOURCE_DIR}/key_types.cpp")
+list(REMOVE_ITEM sources ${key_types_source})
+
 # arch
 if (WIN32)
     file(GLOB arch_headers "win32/*.h")
@@ -33,7 +36,9 @@ if(INPUTLEAP_ADD_HEADERS)
     list(APPEND sources ${headers})
 endif()
 
+add_library(keytypes STATIC ${key_types_source})
 add_library(synlib STATIC ${sources})
+target_link_libraries(synlib keytypes)
 
 if (UNIX)
     target_link_libraries(synlib arch client ipc net base platform mt server)

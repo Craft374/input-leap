@@ -9,7 +9,6 @@
 
 #include "KeyboardSettingsDialog.h"
 
-#include "inputleap/KeyMap.h"
 #include "inputleap/key_types.h"
 
 #include <QAbstractItemView>
@@ -133,12 +132,48 @@ QStringList KeyboardSettingsDialog::availableKeys()
 
 bool KeyboardSettingsDialog::canonicalKey(const QString& text, QString& canonical)
 {
+    const QString trimmed = text.trimmed();
     KeyID key = kKeyNone;
-    if (!inputleap::KeyMap::parseKey(text.trimmed().toStdString(), key) || key == kKeyNone) {
+    for (const KeyNameMapEntry* entry = kKeyNameMap; entry->m_name != nullptr; ++entry) {
+        if (trimmed.compare(QString::fromLatin1(entry->m_name), Qt::CaseInsensitive) == 0) {
+            key = entry->m_id;
+            break;
+        }
+    }
+    if (key == kKeyNone && trimmed.size() == 1) {
+        const ushort character = trimmed[0].unicode();
+        if (character >= 0x21 && character <= 0x7e) {
+            key = character;
+        }
+    }
+    if (key == kKeyNone && trimmed.size() == 6 && trimmed.startsWith(QStringLiteral("\\u"))) {
+        bool parsed = false;
+        const uint value = trimmed.mid(2).toUInt(&parsed, 16);
+        if (parsed && value != 0) {
+            key = value;
+        }
+    }
+    if (key == kKeyNone) {
         return false;
     }
-    canonical = QString::fromStdString(inputleap::KeyMap::formatKey(key, 0));
-    return !canonical.isEmpty();
+
+    QString keyName;
+    for (const KeyNameMapEntry* entry = kKeyNameMap; entry->m_name != nullptr; ++entry) {
+        if (entry->m_id == key) {
+            keyName = QString::fromLatin1(entry->m_name);
+        }
+    }
+    if (!keyName.isEmpty()) {
+        canonical = keyName;
+        return true;
+    }
+    if (key >= 0x21 && key <= 0x7e) {
+        canonical = QString(QChar(static_cast<ushort>(key)));
+    }
+    else {
+        canonical = QStringLiteral("\\u%1").arg(key, 4, 16, QChar('0'));
+    }
+    return true;
 }
 
 void KeyboardSettingsDialog::addMappingRow(const QString& source, const QString& destination)
