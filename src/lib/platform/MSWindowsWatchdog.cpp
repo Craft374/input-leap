@@ -289,7 +289,9 @@ MSWindowsWatchdog::startProcess()
 
         SECURITY_ATTRIBUTES sa{ 0 };
         HANDLE userToken = getUserToken(&sa);
-        m_elevateProcess = m_autoElevated ? m_autoElevated : m_elevateProcess;
+        // getUserToken() honours m_autoElevated for this launch only: latching it
+        // into m_elevateProcess leaves the server running as SYSTEM forever, and a
+        // SYSTEM server cannot read the logged-in user's clipboard.
         m_autoElevated = false;
 
         // patch by Jack Zhou and Henry Tung
