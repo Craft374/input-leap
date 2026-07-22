@@ -41,8 +41,10 @@ private:
     void emptyClipboard()
     {
         MSWindowsClipboard clipboard(nullptr);
-        clipboard.open(0);
-        clipboard.clear();
+        if (clipboard.open(0)) {
+            clipboard.clear();
+            clipboard.close();
+        }
     }
 };
 

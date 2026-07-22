@@ -120,18 +120,25 @@ MSWindowsClipboard::open(Time time) const
 {
     LOG_DEBUG("open clipboard");
 
-    if (!OpenClipboard(m_window)) {
-        // unable to cause this in integ tests; but this can happen!
-        // * http://symless.com/pm/issues/86
-        // * http://symless.com/pm/issues/1256
-        // logging improved to see if we can catch more info next time.
-        LOG_WARN("failed to open clipboard: %d", GetLastError());
-        return false;
+    // The Windows clipboard is a global lock and may be held briefly by
+    // another process while a remote update arrives.
+    static const int kMaxRetries = 5;
+    static const int kRetryDelayMs = 5;
+    for (int attempt = 1; attempt <= kMaxRetries; ++attempt) {
+        if (OpenClipboard(m_window)) {
+            m_time = time;
+            return true;
+        }
+
+        if (attempt < kMaxRetries) {
+            LOG_DEBUG("failed to open clipboard (attempt %d/%d, error=%d), retrying",
+                      attempt, kMaxRetries, GetLastError());
+            Sleep(kRetryDelayMs);
+        }
     }
 
-    m_time = time;
-
-    return true;
+    LOG_WARN("failed to open clipboard after %d attempts: %d", kMaxRetries, GetLastError());
+    return false;
 }
 
 void
