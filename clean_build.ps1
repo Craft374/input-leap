@@ -8,7 +8,10 @@ function Find-VisualStudio {
         $installation = & $vswhere -latest -products * `
             -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
             -format json | ConvertFrom-Json | Select-Object -First 1
-        if ($null -ne $installation) {
+        $compiler = if ($null -ne $installation) {
+            Get-Item -Path (Join-Path $installation.installationPath 'VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe') -ErrorAction SilentlyContinue
+        }
+        if ($null -ne $installation -and $installation.isComplete -and $null -ne $compiler) {
             $major_version = [int]($installation.installationVersion -split '\.')[0]
             if ($major_version -eq 17) {
                 return @{version='Visual Studio 17 2022'; path=(Join-Path $installation.installationPath 'Common7\Tools\VsDevCmd.bat')}
@@ -42,6 +45,17 @@ function Confirm-DependencyInstall($description) {
     return ($answer -eq '' -or $answer -match '^(?i:y(es)?)$')
 }
 
+function Install-AqtPackage([string[]]$aqt_arguments) {
+    $python_command = Get-Command python -CommandType Application -ErrorAction SilentlyContinue
+    if ($null -eq $python_command) {
+        throw 'Python is required to install Qt dependencies automatically.'
+    }
+    & $python_command.Source -m pip install --user --disable-pip-version-check 'aqtinstall==3.1.17'
+    if ($LASTEXITCODE -ne 0) { throw 'Could not install aqtinstall.' }
+    & $python_command.Source -m aqt @aqt_arguments
+    if ($LASTEXITCODE -ne 0) { throw 'Could not install a Qt dependency.' }
+}
+
 $visual_studio = Find-VisualStudio
 if ($null -eq $visual_studio) {
     if (-not (Confirm-DependencyInstall 'Visual Studio 2022 C++ Build Tools')) {
@@ -61,11 +75,15 @@ if ($null -eq $visual_studio) {
     } finally {
         Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
     }
-    $visual_studio = Find-VisualStudio
+    Write-Output 'Waiting for the Visual Studio installer to finish...'
+    for ($attempt = 0; $attempt -lt 120 -and $null -eq $visual_studio; $attempt++) {
+        $visual_studio = Find-VisualStudio
+        if ($null -eq $visual_studio) { Start-Sleep -Seconds 5 }
+    }
 }
 
 if ($null -eq $visual_studio) {
-    throw 'Visual Studio Build Tools were installed but are not available yet. Restart Windows and run this file again.'
+    throw 'Visual Studio Build Tools did not finish within 10 minutes. Wait for Visual Studio Installer to close and run this file again.'
 }
 Write-Output "Using $($visual_studio.version) at $($visual_studio.path)"
 
@@ -97,14 +115,7 @@ if ($null -eq $qt_root) {
         throw 'Qt is required. Install it under C:\Qt or set B_QT_ROOT.'
     }
 
-    $python_command = Get-Command python -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $python_command) {
-        throw 'Python is required to install Qt automatically.'
-    }
-    & $python_command.Source -m pip install --user --disable-pip-version-check 'aqtinstall==3.1.17'
-    if ($LASTEXITCODE -ne 0) { throw 'Could not install aqtinstall.' }
-    & $python_command.Source -m aqt install-qt windows desktop 6.6.3 win64_msvc2019_64 -O .\deps\Qt
-    if ($LASTEXITCODE -ne 0) { throw 'Could not install Qt.' }
+    Install-AqtPackage @('install-qt', 'windows', 'desktop', '6.6.3', 'win64_msvc2019_64', '-O', '.\deps\Qt')
     $qt_root = Get-Item -Path '.\deps\Qt\6.6.3\*' |
         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'lib\cmake\Qt6') } |
         Select-Object -First 1 -ExpandProperty FullName
@@ -112,6 +123,20 @@ if ($null -eq $qt_root) {
 }
 
 Write-Output "Using Qt at $qt_root";
+
+$openssl_root = Join-Path $PSScriptRoot 'deps\Qt\Win_x64'
+$openssl_crypto_dll = Join-Path $openssl_root 'bin\libcrypto-3-x64.dll'
+$openssl_ssl_dll = Join-Path $openssl_root 'bin\libssl-3-x64.dll'
+if (-not (Test-Path -LiteralPath $openssl_crypto_dll) -or -not (Test-Path -LiteralPath $openssl_ssl_dll)) {
+    if (-not (Confirm-DependencyInstall 'OpenSSL 3 x64')) {
+        throw 'OpenSSL 3 x64 is required.'
+    }
+    Install-AqtPackage @('install-tool', 'windows', 'desktop', 'tools_opensslv3_x64', '-O', '.\deps\Qt')
+}
+if (-not (Test-Path -LiteralPath $openssl_crypto_dll) -or -not (Test-Path -LiteralPath $openssl_ssl_dll)) {
+    throw 'OpenSSL installation finished without the required x64 DLLs.'
+}
+Write-Output "Using OpenSSL at $openssl_root"
 
 $bonjour_path = Join-Path $PSScriptRoot 'deps\BonjourSDKLike'
 $bonjour_library = Join-Path $bonjour_path 'Lib\x64\dnssd.lib'
@@ -137,6 +162,7 @@ try {
     & $cmake_path .. -G "$($visual_studio.version)" -A x64 `
         "-DCMAKE_BUILD_TYPE=$build_type" `
         "-DCMAKE_PREFIX_PATH=$qt_root" `
+        "-DOPENSSL_ROOT_DIR=$openssl_root" `
         "-DQT_DEFAULT_MAJOR_VERSION=$qt_major_version" `
         -DDNSSD_LIB="$bonjour_path\Lib\x64\dnssd.lib" `
         -DCMAKE_INSTALL_PREFIX=input-leap-install
@@ -144,6 +170,8 @@ try {
 
     & $cmake_path --build . --parallel --config $build_type --target install
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+
+    Copy-Item -LiteralPath $openssl_crypto_dll, $openssl_ssl_dll -Destination .\input-leap-install -Force
 
     $isccCommand = Get-Command ISCC -ErrorAction SilentlyContinue
     $isccPath = if ($null -ne $isccCommand) { $isccCommand.Source } else { $null }
