@@ -291,13 +291,16 @@ if (APPLE)
     set (CMAKE_INSTALL_RPATH "@loader_path/../Libraries;@loader_path/../Frameworks")
     set(INPUTLEAP_BUNDLE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dist/macos/bundle)
     set(INPUTLEAP_BUNDLE_DIR ${CMAKE_BINARY_DIR}/bundle)
+    set(INPUTLEAP_BUNDLE_CONFIG_DIR ${CMAKE_BINARY_DIR}/bundle-config)
+    set(INPUTLEAP_BUNDLE_TEMPLATE_APP_DIR ${INPUTLEAP_BUNDLE_CONFIG_DIR}/InputLeap.app)
     set(INPUTLEAP_BUNDLE_APP_DIR ${INPUTLEAP_BUNDLE_DIR}/InputLeap.app)
     set(INPUTLEAP_BUNDLE_BINARY_DIR ${INPUTLEAP_BUNDLE_APP_DIR}/Contents/MacOS)
 
-    configure_files(${INPUTLEAP_BUNDLE_SOURCE_DIR} ${INPUTLEAP_BUNDLE_DIR})
+    configure_files(${INPUTLEAP_BUNDLE_SOURCE_DIR} ${INPUTLEAP_BUNDLE_CONFIG_DIR})
+    file(MAKE_DIRECTORY ${INPUTLEAP_BUNDLE_DIR})
 
     add_custom_target(InputLeap_MacOS ALL
-                      bash build_dist.sh
+                      bash ${INPUTLEAP_BUNDLE_CONFIG_DIR}/build_dist.sh
                       DEPENDS input-leap input-leaps input-leapc
                       WORKING_DIRECTORY ${INPUTLEAP_BUNDLE_DIR})
 elseif (UNIX AND NOT APPLE)
