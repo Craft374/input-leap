@@ -504,8 +504,7 @@ bool
 MSWindowsScreen::getClipboard(ClipboardID, IClipboard* dst) const
 {
     MSWindowsClipboard src(m_window);
-    Clipboard::copy(dst, &src);
-    return true;
+    return Clipboard::copy(dst, &src);
 }
 
 void MSWindowsScreen::getShape(std::int32_t& x, std::int32_t& y, std::int32_t& w,
