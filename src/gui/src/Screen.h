@@ -62,6 +62,7 @@ class Screen : public BaseConfig
         bool fix(Fix f) const { return m_Fixes[static_cast<int>(f)]; }
         const QList<bool>& fixes() const { return m_Fixes; }
         const QMap<QString, QString>& keyMappings() const { return m_KeyMappings; }
+        bool reverseMouse() const { return m_ReverseMouse; }
 
         void loadSettings(QSettings& settings);
         void saveSettings(QSettings& settings) const;
@@ -87,6 +88,7 @@ class Screen : public BaseConfig
         void setFix(Fix f, bool on) { m_Fixes[static_cast<int>(f)] = on; }
         QList<bool>& fixes() { return m_Fixes; }
         QMap<QString, QString>& keyMappings() { return m_KeyMappings; }
+        void setReverseMouse(bool on) { m_ReverseMouse = on; }
         void setSwapped(bool on) { m_Swapped = on; }
 
     private:
@@ -99,6 +101,7 @@ class Screen : public BaseConfig
         int m_SwitchCornerSize;
         QList<bool> m_Fixes;
         QMap<QString, QString> m_KeyMappings;
+        bool m_ReverseMouse;
 
         bool m_Swapped;
 };

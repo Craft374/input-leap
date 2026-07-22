@@ -23,6 +23,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <utility>
+
 namespace inputleap {
 
 TEST(OSXKeyStateTests, mapModifiersFromOSX_OSXMask)
@@ -56,6 +58,32 @@ TEST(OSXKeyStateTests, mapModifiersFromOSX_OSXMask)
     std::uint32_t numMask = 0 | kCGEventFlagMaskNumericPad;
     outMask = keyState.mapModifiersFromOSX(numMask);
     EXPECT_EQ(KeyModifierNumLock, outMask);
+}
+
+TEST(OSXKeyStateTests, mapKeyFromEvent_extendedFunctionKeys)
+{
+    inputleap::KeyMap keyMap;
+    MockEventQueue eventQueue;
+    OSXKeyState keyState(&eventQueue, keyMap);
+
+    const std::pair<CGKeyCode, KeyID> keys[] = {
+        {kVK_F17, kKeyF17},
+        {kVK_F18, kKeyF18},
+        {kVK_F19, kKeyF19},
+        {kVK_F20, kKeyF20}
+    };
+    for (const auto& key : keys) {
+        CGEventRef event = CGEventCreateKeyboardEvent(nullptr, key.first, true);
+        ASSERT_NE(nullptr, event);
+
+        OSXKeyState::KeyIDs ids;
+        KeyModifierMask mask = 0;
+        keyState.mapKeyFromEvent(ids, &mask, event);
+        CFRelease(event);
+
+        ASSERT_EQ(1u, ids.size());
+        EXPECT_EQ(key.second, ids.front());
+    }
 }
 
 } // namespace inputleap

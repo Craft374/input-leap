@@ -396,6 +396,40 @@ std::int32_t Server::getJumpZoneSize(BaseClientProxy* client) const
 	}
 }
 
+bool Server::isMouseDirectionReversed(const BaseClientProxy* client) const
+{
+	if (client == m_primaryClient) {
+		return false;
+	}
+
+	const Config::ScreenOptions* options = m_config->getOptions(getName(client));
+	if (options == nullptr) {
+		return false;
+	}
+
+	const auto reverse = options->find(kOptionReverseMouse);
+	return reverse != options->end() && reverse->second != 0;
+}
+
+void Server::transformMousePosition(const BaseClientProxy* client, std::int32_t& x,
+                                    std::int32_t& y) const
+{
+	if (!isMouseDirectionReversed(client)) {
+		return;
+	}
+
+	std::int32_t screenX, screenY, width, height;
+	client->getShape(screenX, screenY, width, height);
+	x = screenX + width - 1 - (x - screenX);
+	y = screenY + height - 1 - (y - screenY);
+}
+
+void Server::sendMouseMove(BaseClientProxy* client, std::int32_t x, std::int32_t y) const
+{
+	transformMousePosition(client, x, y);
+	client->mouseMove(x, y);
+}
+
 void Server::switchScreen(BaseClientProxy* dst, std::int32_t x, std::int32_t y, bool forScreensaver)
 {
 	assert(dst != nullptr);
@@ -452,7 +486,10 @@ void Server::switchScreen(BaseClientProxy* dst, std::int32_t x, std::int32_t y, 
 		++m_seqNum;
 
 		// enter new screen
-		m_active->enter(x, y, m_seqNum,
+		std::int32_t enterX = x;
+		std::int32_t enterY = y;
+		transformMousePosition(m_active, enterX, enterY);
+		m_active->enter(enterX, enterY, m_seqNum,
 								m_config->mapModifierMask(getName(m_active),
 								                          m_primaryClient->getToggleMask()),
 								forScreensaver);
@@ -473,7 +510,7 @@ void Server::switchScreen(BaseClientProxy* dst, std::int32_t x, std::int32_t y, 
                             create_event_data<Server::SwitchToScreenInfo>(info));
 	}
 	else {
-		m_active->mouseMove(x, y);
+		sendMouseMove(m_active, x, y);
 	}
 }
 
@@ -1038,7 +1075,7 @@ Server::stopRelativeMoves()
 		m_xDelta2 = 0;
 		m_yDelta2 = 0;
 		LOG_DEBUG2("synchronize move on %s by %d,%d", getName(m_active).c_str(), m_x, m_y);
-		m_active->mouseMove(m_x, m_y);
+		sendMouseMove(m_active, m_x, m_y);
 	}
 }
 
@@ -1831,6 +1868,10 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 	// have no idea where it really is.
 	if (m_relativeMoves && isLockedToScreenServer()) {
 		LOG_DEBUG2("relative move on %s by %d,%d", getName(m_active).c_str(), dx, dy);
+		if (isMouseDirectionReversed(m_active)) {
+			dx = -dx;
+			dy = -dy;
+		}
 		m_active->mouseRelativeMove(dx, dy);
 		return;
 	}
@@ -1975,7 +2016,7 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 		// warp cursor if it moved.
 		if (m_x != xOld || m_y != yOld) {
 			LOG_DEBUG2("move on %s to %d,%d", getName(m_active).c_str(), m_x, m_y);
-			m_active->mouseMove(m_x, m_y);
+			sendMouseMove(m_active, m_x, m_y);
 		}
 	}
 }

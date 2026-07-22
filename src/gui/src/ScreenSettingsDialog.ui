@@ -485,6 +485,13 @@
     </layout>
    </item>
    <item>
+    <widget class="QCheckBox" name="m_pCheckBoxReverseMouse">
+     <property name="text">
+      <string>Reverse mouse movement on this screen</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <spacer>
      <property name="orientation">
       <enum>Qt::Vertical</enum>

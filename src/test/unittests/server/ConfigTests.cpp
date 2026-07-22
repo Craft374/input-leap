@@ -70,4 +70,39 @@ TEST(ConfigTests, keyMappings_rejectModifiedKeys)
     EXPECT_THROW(input >> config, XConfigRead);
 }
 
+TEST(ConfigTests, screenMouseAndClipboardSizeOptions_roundTrip)
+{
+    std::istringstream input(
+        "section: screens\n"
+        "\tserver:\n"
+        "\tmac:\n"
+        "\t\treverseMouse = true\n"
+        "end\n"
+        "section: options\n"
+        "\tclipboardSharingSize = 1048576\n"
+        "end\n");
+    Config config;
+    input >> config;
+
+    const auto* macOptions = config.getOptions("mac");
+    ASSERT_NE(nullptr, macOptions);
+    EXPECT_EQ(1, macOptions->at(kOptionReverseMouse));
+
+    const auto* globalOptions = config.getOptions("");
+    ASSERT_NE(nullptr, globalOptions);
+    EXPECT_EQ(1048576, globalOptions->at(kOptionClipboardSharingSize));
+
+    std::ostringstream output;
+    output << config;
+    EXPECT_NE(std::string::npos,
+              output.str().find("clipboardSharingSize = 1048576"));
+
+    std::istringstream serialized(output.str());
+    Config reparsed;
+    serialized >> reparsed;
+    EXPECT_EQ(1, reparsed.getOptions("mac")->at(kOptionReverseMouse));
+    EXPECT_EQ(1048576,
+              reparsed.getOptions("")->at(kOptionClipboardSharingSize));
+}
+
 } // namespace inputleap
