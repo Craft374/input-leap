@@ -151,13 +151,26 @@ if (-not (Test-Path -LiteralPath $bonjour_library)) {
     Remove-Item -LiteralPath $bonjour_archive
 }
 
-if (Test-Path -LiteralPath build) {
-    Remove-Item -LiteralPath build -Recurse;
-}
-New-Item -Force -ItemType Directory -Path .\build | Out-Null
-pushd build
-
+$buildExists = Test-Path -LiteralPath build
+$inputLeapService = if ($buildExists) { Get-Service -Name InputLeap -ErrorAction SilentlyContinue } else { $null }
+$restartInputLeapService = $null -ne $inputLeapService -and $inputLeapService.Status -eq 'Running'
+$inputLeapServiceStopped = $false
+$buildDirectoryEntered = $false
 try {
+    if ($restartInputLeapService) {
+        Write-Output 'Stopping the InputLeap service while replacing build files...'
+        Stop-Service -Name InputLeap -Force
+        $inputLeapServiceStopped = $true
+        $inputLeapService.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(15))
+    }
+
+    if ($buildExists) {
+        Remove-Item -LiteralPath build -Recurse
+    }
+    New-Item -Force -ItemType Directory -Path .\build | Out-Null
+    pushd build
+    $buildDirectoryEntered = $true
+
     $env:BONJOUR_SDK_HOME="$bonjour_path"
     & $cmake_path .. -G "$($visual_studio.version)" -A x64 `
         "-DCMAKE_BUILD_TYPE=$build_type" `
@@ -188,5 +201,11 @@ try {
         Write-Warning 'Inno Setup was not found. The application was built without an installer.'
     }
 } finally {
-    popd
+    if ($buildDirectoryEntered) {
+        popd
+    }
+    if ($inputLeapServiceStopped) {
+        Write-Output 'Restarting the InputLeap service...'
+        Start-Service -Name InputLeap
+    }
 }
