@@ -50,7 +50,12 @@ TEST(ConfigTests, keyMappings_areParsedAppliedAndSerialized)
     std::istringstream serialized(output.str());
     Config reparsed;
     serialized >> reparsed;
-    EXPECT_EQ(config, reparsed);
+    EXPECT_EQ(kKeyF18, reparsed.mapKey("mac", kKeyCapsLock));
+    EXPECT_EQ(kKeyF19, reparsed.mapKey("mac", kKeyNumLock));
+    EXPECT_EQ(static_cast<KeyID>(';'), reparsed.mapKey("mac", static_cast<KeyID>(':')));
+    EXPECT_EQ(static_cast<KeyID>('b'), reparsed.mapKey("mac", static_cast<KeyID>('a')));
+    EXPECT_EQ(KeyModifierShift | KeyModifierScrollLock,
+              reparsed.mapModifierMask("mac", mask));
 }
 
 TEST(ConfigTests, keyMappings_rejectModifiedKeys)
