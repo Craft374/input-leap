@@ -71,8 +71,8 @@ int main(int argc, char* argv[])
         // We're running on X11, all good.
         // Continue running.
     } else if (platformType == "wayland") {
-        QMessageBox::information(nullptr, "Input Leap",
-                                 "You are using Wayland. Input Leap supports Wayland via `libei` "
+        QMessageBox::information(nullptr, "InputLeafPlus",
+                                 "You are using Wayland. InputLeafPlus supports Wayland via `libei` "
                                  "but not all desktop environment/window managers support our "
                                  "implementation at this time. Therefore, your mileage may vary.");
     }
@@ -84,9 +84,10 @@ int main(int argc, char* argv[])
 #endif
     QCoreApplication::setOrganizationName("InputLeap");
 	QCoreApplication::setOrganizationDomain("github.com");
-    QCoreApplication::setApplicationName("InputLeap");
+    QCoreApplication::setApplicationName("InputLeafPlus");
 
     QInputLeapApplication app(argc, argv);
+    QGuiApplication::setApplicationDisplayName(QStringLiteral("InputLeafPlus"));
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
     app.setDesktopFileName(QStringLiteral("io.github.input_leap.input-leap"));
@@ -100,8 +101,8 @@ int main(int argc, char* argv[])
         // especially if an identically named application already exists in
         // /Applications). Thus we require InputLeap to reside in the /Applications
         // folder
-        QMessageBox::information(nullptr, "InputLeap",
-                                 "Please drag InputLeap to the Applications folder, "
+        QMessageBox::information(nullptr, "InputLeafPlus",
+                                 "Please drag InputLeafPlus to the Applications folder, "
                                  "and open it from there.");
 		return 1;
 	}
@@ -118,9 +119,14 @@ int main(int argc, char* argv[])
 
 	QSettings settings;
     if (settings.allKeys().empty()) {
-        // if there are no settings, attempt to copy from old Barrier settings location
-        QSettings fallback_settings{"Debauchee", "Barrier"};
-        copy_qsettings(fallback_settings, settings);
+        QSettings inputLeapSettings{"InputLeap", "InputLeap"};
+        if (!inputLeapSettings.allKeys().empty()) {
+            copy_qsettings(inputLeapSettings, settings);
+        }
+        else {
+            QSettings barrierSettings{"Debauchee", "Barrier"};
+            copy_qsettings(barrierSettings, settings);
+        }
     }
 
 	AppConfig appConfig (&settings);
@@ -201,10 +207,10 @@ bool checkMacAssistiveDevices()
 	bool result = AXAPIEnabled();
 	if (!result) {
 		QMessageBox::information(
-            nullptr, "InputLeap",
+            nullptr, "InputLeafPlus",
 			"Please enable access to assistive devices "
 			"System Preferences -> Security & Privacy -> "
-            "Privacy -> Accessibility, then re-open InputLeap.");
+            "Privacy -> Accessibility, then re-open InputLeafPlus.");
 	}
 	return result;
 

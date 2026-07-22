@@ -232,7 +232,7 @@ DaemonApp::mainLoop(bool daemonized)
 void
 DaemonApp::foregroundError(const char* message)
 {
-    MessageBox(nullptr, message, "InputLeap Service", MB_OK | MB_ICONERROR);
+    MessageBox(nullptr, message, "InputLeafPlus Service", MB_OK | MB_ICONERROR);
 }
 
 std::string
@@ -335,7 +335,7 @@ void DaemonApp::handle_ipc_message(const Event& e)
             break;
         }
 
-        case kIpcHello:
+        case kIpcHello: {
             const auto& hm = static_cast<const IpcHelloMessage&>(m);
             std::string type;
             switch (hm.clientType()) {
@@ -353,6 +353,20 @@ void DaemonApp::handle_ipc_message(const Event& e)
             LOG_PRINT("server status: %s", serverstatus);
 
             m_ipcLogOutputter->notifyBuffer();
+            break;
+        }
+
+        case kIpcShutdown:
+            LOG_INFO("got ipc service shutdown message");
+            try {
+                ARCH->setting("Command", "");
+                ARCH->setting("Elevate", "0");
+            }
+            catch (std::runtime_error& e) {
+                LOG_ERR("failed to clear service settings, %s", e.what());
+            }
+            m_watchdog->setCommand("", false);
+            m_events->add_event(EventType::QUIT);
             break;
     }
 }

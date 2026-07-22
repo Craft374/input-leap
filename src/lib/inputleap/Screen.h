@@ -97,7 +97,7 @@ public:
     Sets the system's clipboard contents.  This is usually called
     soon after an enter().
     */
-    void setClipboard(ClipboardID, const IClipboard*);
+    bool setClipboard(ClipboardID, const IClipboard*);
 
     //! Grab clipboard
     /*!

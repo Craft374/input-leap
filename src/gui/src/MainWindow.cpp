@@ -54,26 +54,200 @@
 #if defined(Q_OS_WIN)
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <Shellapi.h>
 #endif
-
-#include <signal.h>
 
 namespace {
 
 static const QString allFilesFilter(QObject::tr("All files (*.*)"));
 #if defined(Q_OS_WIN)
 static const char APP_CONFIG_NAME[] = "input-leap.sgc";
-static const QString APP_CONFIG_FILTER(QObject::tr("InputLeap Configurations (*.sgc)"));
+static const QString APP_CONFIG_FILTER(QObject::tr("InputLeafPlus Configurations (*.sgc)"));
 static QString bonjourBaseUrl = "http://binaries.symless.com/bonjour/";
 static const char bonjourFilename32[] = "Bonjour.msi";
 static const char bonjourFilename64[] = "Bonjour64.msi";
 static const char bonjourTargetFilename[] = "Bonjour.msi";
 #else
 static const char APP_CONFIG_NAME[] = "input-leap.conf";
-static const QString APP_CONFIG_FILTER(QObject::tr("InputLeap Configurations (*.conf)"));
+static const QString APP_CONFIG_FILTER(QObject::tr("InputLeafPlus Configurations (*.conf)"));
 #endif
 static const QString APP_CONFIG_OPEN_FILTER(APP_CONFIG_FILTER + ";;" + allFilesFilter);
 static const QString APP_CONFIG_SAVE_FILTER(APP_CONFIG_FILTER);
+
+#if defined(Q_OS_WIN)
+constexpr wchar_t WINDOWS_SERVICE_NAME[] = L"InputLeap";
+
+bool queryWindowsServiceState(DWORD& state, DWORD& error)
+{
+    state = SERVICE_STOPPED;
+    error = ERROR_SUCCESS;
+
+    SC_HANDLE manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (manager == nullptr) {
+        error = GetLastError();
+        return false;
+    }
+
+    SC_HANDLE service = OpenServiceW(manager, WINDOWS_SERVICE_NAME, SERVICE_QUERY_STATUS);
+    if (service == nullptr) {
+        error = GetLastError();
+        CloseServiceHandle(manager);
+        return false;
+    }
+
+    SERVICE_STATUS_PROCESS status{};
+    DWORD bytesNeeded = 0;
+    const BOOL queried = QueryServiceStatusEx(
+        service, SC_STATUS_PROCESS_INFO, reinterpret_cast<LPBYTE>(&status),
+        sizeof(status), &bytesNeeded);
+    if (queried) {
+        state = status.dwCurrentState;
+    }
+    else {
+        error = GetLastError();
+    }
+
+    CloseServiceHandle(service);
+    CloseServiceHandle(manager);
+    return queried != FALSE;
+}
+
+bool waitForWindowsServiceState(DWORD expectedState, int timeoutMs)
+{
+    QElapsedTimer timer;
+    timer.start();
+    do {
+        DWORD state = SERVICE_STOPPED;
+        DWORD error = ERROR_SUCCESS;
+        if (queryWindowsServiceState(state, error)) {
+            if (state == expectedState) {
+                return true;
+            }
+        }
+        else if (error == ERROR_SERVICE_DOES_NOT_EXIST) {
+            return expectedState == SERVICE_STOPPED;
+        }
+        QThread::msleep(100);
+    } while (timer.elapsed() < timeoutMs);
+
+    return false;
+}
+
+bool startWindowsServiceDirectly(DWORD& error)
+{
+    error = ERROR_SUCCESS;
+    SC_HANDLE manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (manager == nullptr) {
+        error = GetLastError();
+        return false;
+    }
+
+    SC_HANDLE service = OpenServiceW(
+        manager, WINDOWS_SERVICE_NAME, SERVICE_QUERY_STATUS | SERVICE_START);
+    if (service == nullptr) {
+        error = GetLastError();
+        CloseServiceHandle(manager);
+        return false;
+    }
+
+    const BOOL started = StartServiceW(service, 0, nullptr);
+    if (!started) {
+        error = GetLastError();
+    }
+
+    CloseServiceHandle(service);
+    CloseServiceHandle(manager);
+    return started != FALSE || error == ERROR_SERVICE_ALREADY_RUNNING;
+}
+
+bool stopWindowsServiceDirectly(DWORD& error)
+{
+    error = ERROR_SUCCESS;
+    SC_HANDLE manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (manager == nullptr) {
+        error = GetLastError();
+        return false;
+    }
+
+    SC_HANDLE service = OpenServiceW(
+        manager, WINDOWS_SERVICE_NAME, SERVICE_QUERY_STATUS | SERVICE_STOP);
+    if (service == nullptr) {
+        error = GetLastError();
+        CloseServiceHandle(manager);
+        return error == ERROR_SERVICE_DOES_NOT_EXIST;
+    }
+
+    SERVICE_STATUS status{};
+    const BOOL stopped = ControlService(service, SERVICE_CONTROL_STOP, &status);
+    if (!stopped) {
+        error = GetLastError();
+    }
+
+    CloseServiceHandle(service);
+    CloseServiceHandle(manager);
+    return stopped != FALSE || error == ERROR_SERVICE_NOT_ACTIVE;
+}
+
+bool runElevatedServiceCommand(const wchar_t* command)
+{
+    wchar_t systemDirectory[MAX_PATH]{};
+    if (GetSystemDirectoryW(systemDirectory, MAX_PATH) == 0) {
+        return false;
+    }
+
+    const QString executable = QDir::toNativeSeparators(
+        QString::fromWCharArray(systemDirectory) + QStringLiteral("/sc.exe"));
+    const QString parameters = QStringLiteral("%1 InputLeap")
+                                   .arg(QString::fromWCharArray(command));
+
+    SHELLEXECUTEINFOW executeInfo{};
+    executeInfo.cbSize = sizeof(executeInfo);
+    executeInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+    executeInfo.hwnd = nullptr;
+    executeInfo.lpVerb = L"runas";
+    executeInfo.lpFile = reinterpret_cast<LPCWSTR>(executable.utf16());
+    executeInfo.lpParameters = reinterpret_cast<LPCWSTR>(parameters.utf16());
+    executeInfo.nShow = SW_HIDE;
+
+    if (!ShellExecuteExW(&executeInfo)) {
+        return false;
+    }
+
+    const DWORD waitResult = WaitForSingleObject(executeInfo.hProcess, 30000);
+    DWORD exitCode = 1;
+    if (waitResult == WAIT_OBJECT_0) {
+        GetExitCodeProcess(executeInfo.hProcess, &exitCode);
+    }
+    CloseHandle(executeInfo.hProcess);
+    return waitResult == WAIT_OBJECT_0 && exitCode == 0;
+}
+
+bool ensureWindowsServiceRunning()
+{
+    DWORD state = SERVICE_STOPPED;
+    DWORD error = ERROR_SUCCESS;
+    if (!queryWindowsServiceState(state, error)) {
+        return false;
+    }
+    if (state == SERVICE_RUNNING) {
+        return true;
+    }
+    if (state == SERVICE_START_PENDING) {
+        return waitForWindowsServiceState(SERVICE_RUNNING, 30000);
+    }
+    if (state == SERVICE_STOP_PENDING &&
+        !waitForWindowsServiceState(SERVICE_STOPPED, 30000)) {
+        return false;
+    }
+
+    if (!startWindowsServiceDirectly(error)) {
+        if (error != ERROR_ACCESS_DENIED || !runElevatedServiceCommand(L"start")) {
+            return false;
+        }
+    }
+    return waitForWindowsServiceState(SERVICE_RUNNING, 30000);
+}
+#endif
 
 const char* icon_file_for_connection_state(AppConnectionState state)
 {
@@ -155,6 +329,10 @@ MainWindow::MainWindow(QSettings& settings, AppConfig& appConfig) :
     ui_->m_pLabelIpAddresses->setText(getIPAddresses());
 
 #if defined(Q_OS_WIN)
+    if (appConfig.processMode() == Service && !ensureWindowsServiceRunning()) {
+        appendLogError(QStringLiteral("could not start the InputLeafPlus service"));
+    }
+
     // ipc must always be enabled, so that we can disable command when switching to desktop mode.
     connect(&m_IpcClient, &IpcClient::readLogLine, this, &MainWindow::appendLogRaw);
     connect(&m_IpcClient, &IpcClient::errorMessage, this, &MainWindow::appendLogError);
@@ -268,7 +446,7 @@ void MainWindow::createTrayIcon()
 
     m_pTrayIcon = new QSystemTrayIcon(this);
     m_pTrayIcon->setContextMenu(m_pTrayIconMenu);
-    m_pTrayIcon->setToolTip("InputLeap");
+    m_pTrayIcon->setToolTip("InputLeafPlus");
 
     connect(m_pTrayIcon, &QSystemTrayIcon::activated, this, &MainWindow::trayActivated);
 
@@ -280,7 +458,7 @@ void MainWindow::createTrayIcon()
 void MainWindow::retranslateMenuBar()
 {
 #ifndef Q_OS_DARWIN
-    main_menu_->setTitle(tr("&InputLeap"));
+    main_menu_->setTitle(tr("&InputLeafPlus"));
     m_pMenuHelp->setTitle(tr("&Help"));
 #else
     m_pMenuHelp->setTitle(tr("&File"));
@@ -346,8 +524,49 @@ void MainWindow::initConnections()
     connect(ui_->m_pActionStopCmdApp, &QAction::triggered, this, &MainWindow::stop_cmd_app);
     connect(ui_->m_pActionShowLog, &QAction::triggered, this, &MainWindow::showLogWindow);
     connect(ui_->m_pActionReload, &QAction::triggered, this, &MainWindow::restart_cmd_app);
-    connect(ui_->m_pActionQuit, &QAction::triggered, qApp, &QCoreApplication::quit);
+    connect(ui_->m_pActionQuit, &QAction::triggered, this, &MainWindow::quitApplication);
     connect(ui_->m_pButtonQuit, &QPushButton::clicked, ui_->m_pActionQuit, &QAction::trigger);
+}
+
+void MainWindow::quitApplication()
+{
+    if (m_ShuttingDown) {
+        return;
+    }
+    m_ShuttingDown = true;
+
+#if defined(Q_OS_WIN)
+    DWORD state = SERVICE_STOPPED;
+    DWORD queryError = ERROR_SUCCESS;
+    const bool serviceQueried = queryWindowsServiceState(state, queryError);
+    const bool serviceNeedsStop = serviceQueried
+        ? state != SERVICE_STOPPED
+        : queryError != ERROR_SERVICE_DOES_NOT_EXIST;
+    if (serviceNeedsStop) {
+        const bool shutdownSent = m_IpcClient.sendShutdown();
+        DWORD stopError = ERROR_SUCCESS;
+        const bool stopRequested = stopWindowsServiceDirectly(stopError);
+
+        bool stopped = false;
+        if (stopRequested || shutdownSent) {
+            stopped = waitForWindowsServiceState(SERVICE_STOPPED, 30000);
+        }
+        if (!stopped && runElevatedServiceCommand(L"stop")) {
+            stopped = waitForWindowsServiceState(SERVICE_STOPPED, 30000);
+        }
+        if (!stopped) {
+            m_ShuttingDown = false;
+            QMessageBox::critical(
+                this, tr("InputLeafPlus"),
+                tr("The InputLeafPlus service could not be stopped. "
+                   "The application will remain open so you can try again."));
+            return;
+        }
+    }
+    m_IpcClient.disconnectFromHost();
+#endif
+
+    qApp->quit();
 }
 
 void MainWindow::saveSettings()
@@ -469,9 +688,9 @@ void MainWindow::checkConnected(const QString& line)
 
         if (!appConfig().startedBefore() && isVisible()) {
                 QMessageBox::information(
-                    this, "InputLeap",
-                    tr("InputLeap is now connected. You can close the "
-                    "config window and InputLeap will remain connected in "
+                    this, "InputLeafPlus",
+                    tr("InputLeafPlus is now connected. You can close the "
+                    "config window and InputLeafPlus will remain connected in "
                     "the background."));
 
             appConfig().setStartedBefore(true);
@@ -570,6 +789,16 @@ void MainWindow::start_cmd_app()
 {
     bool desktopMode = appConfig().processMode() == Desktop;
     bool serviceMode = appConfig().processMode() == Service;
+
+#if defined(Q_OS_WIN)
+    if (serviceMode && !ensureWindowsServiceRunning()) {
+        set_connection_state(AppConnectionState::DISCONNECTED);
+        QMessageBox::warning(
+            this, tr("InputLeafPlus"),
+            tr("The InputLeafPlus service could not be started."));
+        return;
+    }
+#endif
 
     appendLogDebug("starting process");
     m_ExpectedRunningState = kStarted;
@@ -687,8 +916,8 @@ bool MainWindow::clientArgs(QStringList& args, QString& app)
     if (!QFile::exists(app))
     {
         show();
-        QMessageBox::warning(this, tr("InputLeap client not found"),
-                             tr("The executable for the InputLeap client does not exist."));
+        QMessageBox::warning(this, tr("InputLeafPlus client not found"),
+                             tr("The executable for the InputLeafPlus client does not exist."));
         return false;
     }
 
@@ -715,7 +944,7 @@ bool MainWindow::clientArgs(QStringList& args, QString& app)
         show();
         if (!m_SuppressEmptyServerWarning) {
             QMessageBox::warning(this, tr("Hostname is empty"),
-                             tr("Please fill in a hostname for the InputLeap client to connect to."));
+                             tr("Please fill in a hostname for the InputLeafPlus client to connect to."));
         }
         return false;
     }
@@ -736,7 +965,7 @@ QString MainWindow::configFilename()
         if (!m_pTempConfigFile->open())
         {
             QMessageBox::critical(this, tr("Cannot write configuration file"),
-                                  tr("The temporary configuration file required to start InputLeap can not be written."));
+                                  tr("The temporary configuration file required to start InputLeafPlus can not be written."));
             return "";
         }
 
@@ -750,7 +979,7 @@ QString MainWindow::configFilename()
         if (!QFile::exists(ui_->m_pLineEditConfigFile->text()))
         {
             if (QMessageBox::warning(this, tr("Configuration filename invalid"),
-                tr("You have not filled in a valid configuration file for the InputLeap server. "
+                tr("You have not filled in a valid configuration file for the InputLeafPlus server. "
                         "Do you want to browse for the configuration file now?"), QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes
                     || !on_m_pButtonBrowseConfigFile_clicked())
                 return "";
@@ -790,8 +1019,8 @@ bool MainWindow::serverArgs(QStringList& args, QString& app)
 
     if (!QFile::exists(app))
     {
-        QMessageBox::warning(this, tr("InputLeap server not found"),
-                             tr("The executable for the InputLeap server does not exist."));
+        QMessageBox::warning(this, tr("InputLeafPlus server not found"),
+                             tr("The executable for the InputLeafPlus server does not exist."));
         return false;
     }
 
@@ -862,13 +1091,14 @@ void MainWindow::stopDesktop()
         return;
     }
 
-    appendLogInfo("stopping InputLeap desktop process");
+    appendLogInfo("stopping InputLeafPlus desktop process");
 
     if (cmd_app_process_->isOpen()) {
-#if SYSAPI_UNIX
-        kill(cmd_app_process_->processId(), SIGTERM);
-        cmd_app_process_->waitForFinished(5000);
-#endif
+        cmd_app_process_->terminate();
+        if (!cmd_app_process_->waitForFinished(5000)) {
+            cmd_app_process_->kill();
+            cmd_app_process_->waitForFinished(5000);
+        }
         cmd_app_process_->close();
     }
 
@@ -932,17 +1162,17 @@ void MainWindow::set_connection_state(AppConnectionState state)
             ui_->m_pLabelPadlock->hide();
         }
 
-        setStatus(tr("InputLeap is running."));
+        setStatus(tr("InputLeafPlus is running."));
 
         break;
     }
     case AppConnectionState::CONNECTING:
         ui_->m_pLabelPadlock->hide();
-        setStatus(tr("InputLeap is starting."));
+        setStatus(tr("InputLeafPlus is starting."));
         break;
     case AppConnectionState::DISCONNECTED:
         ui_->m_pLabelPadlock->hide();
-        setStatus(tr("InputLeap is not running."));
+        setStatus(tr("InputLeafPlus is not running."));
         break;
     case AppConnectionState::TRANSFERRING:
         break;
@@ -1155,7 +1385,7 @@ void MainWindow::on_m_pGroupServer_toggled(bool on)
 
 bool MainWindow::on_m_pButtonBrowseConfigFile_clicked()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, tr("Browse for a InputLeap config file"), QString(), APP_CONFIG_OPEN_FILTER);
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Browse for an InputLeafPlus config file"), QString(), APP_CONFIG_OPEN_FILTER);
 
     if (!fileName.isEmpty())
     {
@@ -1305,7 +1535,7 @@ void MainWindow::downloadBonjour()
     }
     else {
         QMessageBox::critical(
-            this, tr("InputLeap"),
+            this, tr("InputLeafPlus"),
             tr("Failed to detect system architecture."));
         return;
     }
@@ -1319,7 +1549,7 @@ void MainWindow::downloadBonjour()
 
     if (m_DownloadMessageBox == nullptr) {
         m_DownloadMessageBox = new QMessageBox(this);
-        m_DownloadMessageBox->setWindowTitle("InputLeap");
+        m_DownloadMessageBox->setWindowTitle("InputLeafPlus");
         m_DownloadMessageBox->setIcon(QMessageBox::Information);
         m_DownloadMessageBox->setText("Installing Bonjour, please wait...");
 #if QT_VERSION_MAJOR < 6
@@ -1354,7 +1584,7 @@ void MainWindow::installBonjour()
         m_DownloadMessageBox->hide();
 
         QMessageBox::warning(
-            this, "InputLeap",
+            this, "InputLeafPlus",
             tr("Failed to download Bonjour installer to location: %1")
             .arg(tempLocation));
         return;
@@ -1390,7 +1620,7 @@ void MainWindow::promptAutoConfig()
 {
     if (!isBonjourRunning()) {
         int r = QMessageBox::question(
-            this, tr("InputLeap"),
+            this, tr("InputLeafPlus"),
             tr("Do you want to enable auto config and install Bonjour?\n\n"
                "This feature helps you establish the connection."),
             QMessageBox::Yes | QMessageBox::No);
@@ -1420,7 +1650,7 @@ void MainWindow::on_m_pCheckBoxAutoConfig_toggled(bool checked)
     if (!isBonjourRunning() && checked) {
         if (!m_SuppressAutoConfigWarning) {
             int r = QMessageBox::information(
-                this, tr("InputLeap"),
+                this, tr("InputLeafPlus"),
                 tr("Auto config feature requires Bonjour.\n\n"
                    "Do you want to install Bonjour?"),
                 QMessageBox::Yes | QMessageBox::No);

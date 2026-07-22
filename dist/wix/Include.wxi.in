@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include>
-    <?define Name="InputLeap" ?>
+    <?define Name="InputLeafPlus" ?>
     <?define Version="@INPUTLEAP_WIX_VERSION@" ?>
     <?define QtVersion="@QT_VERSION@" ?>
     <?define Author="InputLeap contributors" ?>

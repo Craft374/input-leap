@@ -528,7 +528,7 @@ const KeyMap::KeyItem* KeyMap::mapCommandKey(Keystrokes& keys, KeyID id, std::in
             KeyModifierMask requiredIgnoreShiftMask = item.m_required & ~KeyModifierShift;
             if ((item.m_required & desiredShiftMask) == (item.m_sensitive & desiredShiftMask) &&
                 ((requiredIgnoreShiftMask & desiredMask) == requiredIgnoreShiftMask)) {
-                LOG_INFO("found key in group %d", effectiveGroup);
+                LOG_DEBUG1("found key in group %d", effectiveGroup);
                 keyItem = &item;
                 break;
             }

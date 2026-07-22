@@ -75,20 +75,20 @@ def main():
             f"InputLeap_{version}_linux_x86_64.flatpak",
         ),
         "macOS-Apple_Silicon-installer": (
-            "InputLeap-.*-release.dmg",
-            f"InputLeap_{version}_macos_AppleSilicon.dmg",
+            "InputLeafPlus-.*-release.dmg",
+            f"InputLeafPlus_{version}_macos_AppleSilicon.dmg",
         ),
         "macOS-x86_64-installer": (
-            "InputLeap-.*-release.dmg",
-            f"InputLeap_{version}_macos_x86_64.dmg",
+            "InputLeafPlus-.*-release.dmg",
+            f"InputLeafPlus_{version}_macos_x86_64.dmg",
         ),
         "windows-installer-Windows Qt5": (
-            "InputLeapSetup-.*-release.exe",
-            f"InputLeap_{version}_windows_qt5.exe",
+            "InputLeafPlusSetup-.*-release.exe",
+            f"InputLeafPlus_{version}_windows_qt5.exe",
         ),
         "windows-installer-Windows Qt6": (
-            "InputLeapSetup-.*-release.exe",
-            f"InputLeap_{version}_windows_qt6.exe",
+            "InputLeafPlusSetup-.*-release.exe",
+            f"InputLeafPlus_{version}_windows_qt6.exe",
         ),
     }
 

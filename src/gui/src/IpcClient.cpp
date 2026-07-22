@@ -66,6 +66,7 @@ void IpcClient::connectToHost()
 
 void IpcClient::disconnectFromHost()
 {
+    m_Enabled = false;
     Q_EMIT infoMessage("service disconnect");
     m_Reader->stop();
     m_Socket->close();
@@ -121,6 +122,18 @@ void IpcClient::sendCommand(const QString& command, ElevateMode const elevate)
     // Refer to enum ElevateMode documentation for why this flag is mapped this way
     elevateBuf[0] = (elevate == ElevateAlways) ? 1 : 0;
     stream.writeRawData(elevateBuf, 1);
+}
+
+bool IpcClient::sendShutdown()
+{
+    if (m_Socket->state() != QAbstractSocket::ConnectedState) {
+        return false;
+    }
+
+    QDataStream stream(m_Socket);
+    stream.writeRawData(kIpcMsgShutdown, 4);
+    m_Socket->flush();
+    return m_Socket->waitForBytesWritten(1000) || m_Socket->bytesToWrite() == 0;
 }
 
 void IpcClient::handleReadLogLine(const QString& text)

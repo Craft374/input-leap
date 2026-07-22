@@ -71,10 +71,10 @@ BEGIN
             VALUE "CompanyWeb", "https://github.com/input-leap/input-leap"
             VALUE "FileVersion", INPUTLEAP_VERSION
             VALUE "LegalCopyright", "Copyright (C) 2021-2023 InputLeap contributors\nCopyright (C) 2018 Debauchee Open Source Group\nCopyright (C) 2012-2016 Symless Ltd.\nCopyright (C) 2008-2014 Nick Bolton\nCopyright (C) 2002-2014 Chris Schoeneman"
-            VALUE "ProductName", "Barrier"
+            VALUE "ProductName", "InputLeafPlus"
             VALUE "ProductVersion", INPUTLEAP_VERSION
             VALUE "OriginalFilename", "input-leapc.exe"
-            VALUE "FileDescription", "Open source KVM software client"
+            VALUE "FileDescription", "InputLeafPlus client"
             VALUE "InternalName", "input-leapc"
         END
     END
@@ -102,7 +102,7 @@ IDI_INPUTLEAP             ICON                    "../../res/input-leap.ico"
 
 IDR_TASKBAR MENU
 BEGIN
-    POPUP "Barrier"
+    POPUP "InputLeafPlus"
     BEGIN
         MENUITEM "Show Status",                 IDC_TASKBAR_STATUS
         MENUITEM "Show Log",                    IDC_TASKBAR_SHOW_LOG
@@ -144,8 +144,8 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_FAILED              "Barrier is about to quit with errors or warnings.  Please check the log then click OK."
-    IDS_INIT_FAILED         "Barrier failed to initialize: %{1}"
+    IDS_FAILED              "InputLeafPlus is about to quit with errors or warnings.  Please check the log then click OK."
+    IDS_INIT_FAILED         "InputLeafPlus failed to initialize: %{1}"
     IDS_UNCAUGHT_EXCEPTION  "Uncaught exception: %{1}"
 END
 

@@ -5,9 +5,9 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>InputLeap</string>
+    <string>InputLeafPlus</string>
     <key>CFBundleExecutable</key>
-    <string>InputLeap</string>
+    <string>input-leap</string>
     <key>CFBundleIconFile</key>
     <string>InputLeap.icns</string>
     <key>CFBundleIdentifier</key>
@@ -16,7 +16,7 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>InputLeap</string>
+    <string>InputLeafPlus</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

@@ -260,7 +260,9 @@ Client::leave()
 void
 Client::setClipboard(ClipboardID id, const IClipboard* clipboard)
 {
-     m_screen->setClipboard(id, clipboard);
+    if (!m_screen->setClipboard(id, clipboard)) {
+        LOG_WARN("failed to update clipboard %d", id);
+    }
     m_ownClipboard[id]  = false;
     m_sentClipboard[id] = false;
 }

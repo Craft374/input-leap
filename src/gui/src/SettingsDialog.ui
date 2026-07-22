@@ -90,7 +90,7 @@
       <item row="2" column="1">
        <widget class="QComboBox" name="m_pComboElevate">
         <property name="toolTip">
-         <string>Specify when the InputLeap service should run at an elevated privilege level</string>
+         <string>Specify when the InputLeafPlus service should run at an elevated privilege level</string>
         </property>
         <property name="currentIndex">
          <number>2</number>

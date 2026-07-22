@@ -23,7 +23,7 @@
    </sizepolicy>
   </property>
   <property name="windowTitle">
-   <string>About InputLeap</string>
+   <string>About InputLeafPlus</string>
   </property>
   <property name="modal">
    <bool>true</bool>
@@ -44,9 +44,9 @@ Copyright © 2022-2024 InputLeap Developers&lt;br /&gt;
 Copyright © 2018 Debauchee Open Source Group&lt;br /&gt;
 Copyright © 2012-2016 Symless Ltd.&lt;br /&gt;
 Copyright © 2002-2012 Chris Schoeneman, Nick Bolton, Volker Lanz.&lt;br /&gt;&lt;br /&gt;
-InputLeap is released under the GNU General Public License (GPLv2).&lt;br /&gt;&lt;br /&gt;
-InputLeap is based on CosmoSynergy by Richard Lee and Adam Feder.&lt;br /&gt;
-The InputLeap GUI is based on QSynergy by Volker Lanz.
+InputLeafPlus is released under the GNU General Public License (GPLv2).&lt;br /&gt;&lt;br /&gt;
+InputLeafPlus is based on InputLeap, CosmoSynergy by Richard Lee and Adam Feder.&lt;br /&gt;
+The GUI is based on QSynergy by Volker Lanz.
 &lt;/p&gt;</string>
      </property>
      <property name="margin">

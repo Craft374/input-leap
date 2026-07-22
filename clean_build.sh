@@ -51,7 +51,7 @@ esac
 rm -rf -- "$B_BUILD_DIR"
 mkdir -p -- "$B_BUILD_DIR"
 cd -- "$B_BUILD_DIR"
-echo "Starting Input Leap $B_BUILD_TYPE build in '${B_BUILD_DIR}'..."
+echo "Starting InputLeafPlus $B_BUILD_TYPE build in '${B_BUILD_DIR}'..."
 "$B_CMAKE" $B_CMAKE_FLAGS ..
 "$B_CMAKE" --build . --parallel
 echo "Build completed successfully"

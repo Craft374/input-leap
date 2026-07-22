@@ -129,6 +129,7 @@ public slots:
         void logError();
         void bonjourInstallFinished();
         void showLogWindow();
+        void quitApplication();
 
     protected:
         QSettings& settings() { return m_Settings; }
@@ -193,6 +194,7 @@ public slots:
         SslCertificate* m_pSslCertificate;
         QStringList m_PendingClientNames;
         LogWindow *m_pLogWindow;
+        bool m_ShuttingDown = false;
 
         bool m_fingerprint_expanded = false;
 

@@ -8,7 +8,7 @@ pause_on_exit() {
     trap - EXIT
     echo
     if [ "$status" -eq 0 ]; then
-        echo "Build completed: $PWD/build/bundle/InputLeap.app"
+        echo "Build completed: $PWD/build/bundle/InputLeafPlus.app"
     else
         echo "Build failed. See the error above."
     fi

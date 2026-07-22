@@ -10,8 +10,8 @@ B_VERSION="@INPUTLEAP_VERSION@"
 B_BINDIR="@CMAKE_RUNTIME_OUTPUT_DIRECTORY@"
 B_BUILDTYPE="@CMAKE_BUILD_TYPE@"
 B_TEMPLATE_APP="@INPUTLEAP_BUNDLE_TEMPLATE_APP_DIR@"
-B_APP="InputLeap.app"
-B_STAGING_APP=".InputLeap.building.app"
+B_APP="InputLeafPlus.app"
+B_STAGING_APP=".InputLeafPlus.building.app"
 B_MACOS="$B_STAGING_APP/Contents/MacOS"
 B_INPUTLEAPC="$B_MACOS/input-leapc"
 B_INPUTLEAPS="$B_MACOS/input-leaps"
@@ -34,7 +34,7 @@ app_is_running() {
 }
 
 if app_is_running; then
-    error "Close the InputLeap app from this build folder before rebuilding."
+    error "Close the InputLeafPlus app from this build folder before rebuilding."
     exit 1
 fi
 
@@ -73,7 +73,7 @@ codesign --verify --deep --strict --verbose=2 "$B_STAGING_APP" || exit 1
 
 # Keep the last working app available until the replacement is fully signed.
 if app_is_running; then
-    error "InputLeap was opened during the build. Close it and build again."
+    error "InputLeafPlus was opened during the build. Close it and build again."
     exit 1
 fi
 rm -rf "$B_APP" || exit 1
@@ -81,9 +81,9 @@ mv "$B_STAGING_APP" "$B_APP" || exit 1
 codesign --verify --deep --strict --verbose=2 "$B_APP" || exit 1
 
 if [ "$B_BUILDTYPE" = "Release" ]; then
-    B_DMG="InputLeap-$B_VERSION.dmg"
+    B_DMG="InputLeafPlus-$B_VERSION.dmg"
     info "Building Release disk image (dmg)"
-    hdiutil create -fs HFS+ -format UDZO -volname "InputLeap" \
+    hdiutil create -fs HFS+ -format UDZO -volname "InputLeafPlus" \
         -srcfolder "$B_APP" -ov "$B_DMG" || exit 1
     success "Created $B_DMG"
 else

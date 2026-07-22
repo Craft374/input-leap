@@ -155,10 +155,10 @@ void Screen::warpCursor(std::int32_t x, std::int32_t y)
     m_screen->warpCursor(x, y);
 }
 
-void
+bool
 Screen::setClipboard(ClipboardID id, const IClipboard* clipboard)
 {
-    m_screen->setClipboard(id, clipboard);
+    return m_screen->setClipboard(id, clipboard);
 }
 
 void

@@ -62,7 +62,7 @@ SetupWizard::~SetupWizard() = default;
 bool SetupWizard::validateCurrentPage()
 {
     QMessageBox message;
-    message.setWindowTitle(tr("Setup InputLeap"));
+    message.setWindowTitle(tr("Setup InputLeafPlus"));
     message.setIcon(QMessageBox::Information);
 
     if (currentPage() == ui_->m_pNodePage)

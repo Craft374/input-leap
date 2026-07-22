@@ -90,6 +90,9 @@ void IpcClientProxy::handle_data()
         else if (memcmp(code, kIpcMsgCommand, 4) == 0) {
             event_data = create_event_data<IpcCommandMessage>(parseCommand());
         }
+        else if (memcmp(code, kIpcMsgShutdown, 4) == 0) {
+            event_data = create_event_data<IpcShutdownMessage>(IpcShutdownMessage{});
+        }
         else {
             LOG_ERR("invalid ipc message");
             disconnect();

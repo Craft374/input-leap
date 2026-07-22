@@ -66,7 +66,7 @@ KeyboardSettingsDialog::KeyboardSettingsDialog(
     }
 
     auto* presetButton = new QPushButton(
-        tr("Preset: Alt to Command, Windows to Option"), modifierGroup);
+        tr("Preset: Ctrl to Command, Windows to Control"), modifierGroup);
     connect(presetButton, &QPushButton::clicked, this,
             &KeyboardSettingsDialog::applyWindowsMacPreset);
     modifierLayout->addWidget(presetButton, 6, 0);
@@ -195,10 +195,12 @@ void KeyboardSettingsDialog::addMappingRow(const QString& source, const QString&
 
 void KeyboardSettingsDialog::applyWindowsMacPreset()
 {
-    m_ModifierBoxes[static_cast<int>(Screen::Modifier::Alt)]->setCurrentIndex(
+    m_ModifierBoxes[static_cast<int>(Screen::Modifier::Ctrl)]->setCurrentIndex(
         static_cast<int>(Screen::Modifier::Super));
-    m_ModifierBoxes[static_cast<int>(Screen::Modifier::Super)]->setCurrentIndex(
+    m_ModifierBoxes[static_cast<int>(Screen::Modifier::Alt)]->setCurrentIndex(
         static_cast<int>(Screen::Modifier::Alt));
+    m_ModifierBoxes[static_cast<int>(Screen::Modifier::Super)]->setCurrentIndex(
+        static_cast<int>(Screen::Modifier::Ctrl));
 }
 
 void KeyboardSettingsDialog::resetModifiers()

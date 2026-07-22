@@ -6,7 +6,7 @@
   <id>io.github.input_leap.input-leap</id>
   <metadata_license>FSFAP</metadata_license>
   <project_license>GPL-2.0</project_license>
-  <name>InputLeap</name>
+  <name>InputLeafPlus</name>
   <summary>Share mouse and keyboard between multiple computers over the network</summary>
   <developer id="io.github.input_leap">
     <name>Input Leap Team</name>
@@ -15,7 +15,7 @@
 
   <description>
     <p>
-      InputLeap allows you to share one mouse and keyboard between multiple computers.
+      InputLeafPlus allows you to share one mouse and keyboard between multiple computers.
       Work seamlessly across Windows, macOS and Linux.
     </p>
   </description>

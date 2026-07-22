@@ -48,6 +48,7 @@ public:
 
     void connectToServer_handle_message_received(const Event& e);
     void sendMessageToServer_serverHandleMessageReceived(const Event& e);
+    void sendShutdownToServer_serverHandleMessageReceived(const Event& e);
     void sendMessageToClient_server_handle_client_connected(const Event& e);
     void sendMessageToClient_client_handle_message_received(const Event& e);
 
@@ -59,6 +60,8 @@ public:
     std::string m_sendMessageToServer_receivedString;
     std::string m_sendMessageToClient_receivedString;
     IpcClient* m_sendMessageToServer_client;
+    IpcClient* m_sendShutdownToServer_client;
+    bool m_sendShutdownToServer_received;
     IpcServer* m_sendMessageToClient_server;
     TestEventQueue m_events;
 
@@ -114,6 +117,30 @@ TEST_F(IpcTests, sendMessageToServer)
     EXPECT_EQ("test", m_sendMessageToServer_receivedString);
 }
 
+TEST_F(IpcTests, sendShutdownToServer)
+{
+    SocketMultiplexer socketMultiplexer;
+    IpcServer server(&m_events, &socketMultiplexer, TEST_IPC_PORT);
+    server.listen();
+
+    m_events.add_handler(EventType::IPC_SERVER_MESSAGE_RECEIVED, &server,
+                         [this](const auto& e)
+    {
+        sendShutdownToServer_serverHandleMessageReceived(e);
+    });
+
+    IpcClient client(&m_events, &socketMultiplexer, TEST_IPC_PORT);
+    client.connect();
+    m_sendShutdownToServer_client = &client;
+
+    m_events.initQuitTimeout(5);
+    m_events.loop();
+    m_events.remove_handler(EventType::IPC_SERVER_MESSAGE_RECEIVED, &server);
+    m_events.cleanupQuitTimeout();
+
+    EXPECT_TRUE(m_sendShutdownToServer_received);
+}
+
 TEST_F(IpcTests, sendMessageToClient)
 {
     SocketMultiplexer socketMultiplexer;
@@ -151,6 +178,8 @@ m_connectToServer_helloMessageReceived(false),
 m_connectToServer_hasClientNode(false),
 m_connectToServer_server(nullptr),
 m_sendMessageToServer_client(nullptr),
+m_sendShutdownToServer_client(nullptr),
+m_sendShutdownToServer_received(false),
 m_sendMessageToClient_server(nullptr)
 {
 }
@@ -182,6 +211,19 @@ void IpcTests::sendMessageToServer_serverHandleMessageReceived(const Event& e)
         const auto& cm = static_cast<const IpcCommandMessage&>(m);
         LOG_DEBUG("got ipc command message, %s", cm.command().c_str());
         m_sendMessageToServer_receivedString = cm.command();
+        m_events.raiseQuitEvent();
+    }
+}
+
+void IpcTests::sendShutdownToServer_serverHandleMessageReceived(const Event& e)
+{
+    const auto& m = e.get_data_as<IpcMessage>();
+    if (m.type() == kIpcHello) {
+        IpcShutdownMessage shutdown;
+        m_sendShutdownToServer_client->send(shutdown);
+    }
+    else if (m.type() == kIpcShutdown) {
+        m_sendShutdownToServer_received = true;
         m_events.raiseQuitEvent();
     }
 }

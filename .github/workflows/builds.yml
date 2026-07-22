@@ -381,13 +381,13 @@ jobs:
 
       - name: Archive debug app
         if: env.B_BUILD_TYPE != 'Release'
-        run: tar -czf InputLeap-macOS-ARM64.tar.gz -C build/bundle InputLeap.app
+        run: tar -czf InputLeafPlus-macOS-ARM64.tar.gz -C build/bundle InputLeafPlus.app
 
       - uses: actions/upload-artifact@v4
         if: env.B_BUILD_TYPE != 'Release'
         with:
           name: macOS-ARM64-debug
-          path: ./InputLeap*.tar.gz
+          path: ./InputLeafPlus*.tar.gz
           if-no-files-found: error
 
   win-build:

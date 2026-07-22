@@ -74,6 +74,19 @@ void Screen::loadSettings(QSettings& settings)
     readSettings<QString>(settings, aliases(), "alias", QString(""));
     readSettings<int>(settings, modifiers(), "modifier", Modifier::DefaultMod,
                       static_cast<int>(Modifier::Count));
+
+    // Migrate the old Windows/macOS preset so familiar Ctrl shortcuts produce
+    // Command shortcuts on macOS clients.
+    if (modifier(Modifier::Shift) == Modifier::Shift &&
+        modifier(Modifier::Ctrl) == Modifier::Ctrl &&
+        modifier(Modifier::Alt) == Modifier::Super &&
+        modifier(Modifier::Meta) == Modifier::Meta &&
+        modifier(Modifier::Super) == Modifier::Alt) {
+        modifiers()[static_cast<int>(Modifier::Ctrl)] = Modifier::Super;
+        modifiers()[static_cast<int>(Modifier::Alt)] = Modifier::Alt;
+        modifiers()[static_cast<int>(Modifier::Super)] = Modifier::Ctrl;
+    }
+
     readSettings<bool>(settings, switchCorners(), "switchCorner", false,
                        static_cast<int>(SwitchCorner::Count));
     readSettings<bool>(settings, fixes(), "fix", false, static_cast<int>(Fix::Count));
