@@ -36,6 +36,7 @@ set(GUI_SOURCE_FILES
     src/Ipc.cpp
     src/IpcReader.cpp
     src/KeySequenceWidget.cpp
+    src/KeyboardSettingsDialog.cpp
     src/LogWindow.cpp
     src/main.cpp
     src/MainWindow.cpp
@@ -75,6 +76,7 @@ set(GUI_HEADER_FILES
     src/Ipc.h
     src/IpcReader.h
     src/KeySequenceWidget.h
+    src/KeyboardSettingsDialog.h
     src/LogWindow.h
     src/MainWindow.h
     src/NewScreenWidget.h
@@ -191,6 +193,7 @@ add_executable (input-leap WIN32
 include_directories (./src)
 
 target_link_libraries(input-leap
+    synlib
     net
     arch
     base

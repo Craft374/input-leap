@@ -24,6 +24,7 @@
 #include "net/XSocket.h"
 
 #include <cstdlib>
+#include <sstream>
 
 namespace inputleap {
 
@@ -329,6 +330,17 @@ bool Config::removeOptions(const std::string& name)
 	return true;
 }
 
+bool Config::addKeyMapping(const std::string& name, KeyID source, KeyID destination)
+{
+    auto index = m_map.find(name);
+    if (index == m_map.end() || source == kKeyNone || destination == kKeyNone) {
+        return false;
+    }
+
+    index->second.m_keyMappings[source] = destination;
+    return true;
+}
+
 bool Config::isValidScreenName(const std::string& name) const
 {
 	// name is valid if matches validname
@@ -517,6 +529,54 @@ const Config::ScreenOptions* Config::getOptions(const std::string& name) const
 
 	// return options
 	return options;
+}
+
+const Config::KeyMappings* Config::getKeyMappings(const std::string& name) const
+{
+    auto index = m_map.find(name);
+    return index == m_map.end() ? nullptr : &index->second.m_keyMappings;
+}
+
+KeyID Config::mapKey(const std::string& name, KeyID key) const
+{
+    const KeyMappings* mappings = getKeyMappings(name);
+    if (mappings == nullptr) {
+        return key;
+    }
+
+    auto mapping = mappings->find(key);
+    return mapping == mappings->end() ? key : mapping->second;
+}
+
+KeyModifierMask Config::mapModifierMask(const std::string& name, KeyModifierMask mask) const
+{
+    const KeyMappings* mappings = getKeyMappings(name);
+    if (mappings == nullptr) {
+        return mask;
+    }
+
+    const auto clearIfRemapped = [mappings, &mask](KeyID key, KeyModifierMask modifier) {
+        auto mapping = mappings->find(key);
+        if (mapping != mappings->end() && mapping->second != key) {
+            mask &= ~modifier;
+        }
+    };
+
+    clearIfRemapped(kKeyShift_L, KeyModifierShift);
+    clearIfRemapped(kKeyShift_R, KeyModifierShift);
+    clearIfRemapped(kKeyControl_L, KeyModifierControl);
+    clearIfRemapped(kKeyControl_R, KeyModifierControl);
+    clearIfRemapped(kKeyAlt_L, KeyModifierAlt);
+    clearIfRemapped(kKeyAlt_R, KeyModifierAlt);
+    clearIfRemapped(kKeyMeta_L, KeyModifierMeta);
+    clearIfRemapped(kKeyMeta_R, KeyModifierMeta);
+    clearIfRemapped(kKeySuper_L, KeyModifierSuper);
+    clearIfRemapped(kKeySuper_R, KeyModifierSuper);
+    clearIfRemapped(kKeyAltGr, KeyModifierAltGr);
+    clearIfRemapped(kKeyCapsLock, KeyModifierCapsLock);
+    clearIfRemapped(kKeyNumLock, KeyModifierNumLock);
+    clearIfRemapped(kKeyScrollLock, KeyModifierScrollLock);
+    return mask;
 }
 
 bool
@@ -880,6 +940,22 @@ Config::readSectionScreens(ConfigReadContext& s)
 			else if (name == "preserveFocus") {
 				addOption(screen, kOptionScreenPreserveFocus,
 					s.parseBoolean(value));
+			}
+			else if (name == "keyMap") {
+                std::istringstream mapping(value);
+                std::string sourceName;
+                std::string destinationName;
+                std::string extra;
+                if (!(mapping >> sourceName >> destinationName) || mapping >> extra) {
+                    throw XConfigRead(s, "syntax for keyMap: source destination");
+                }
+
+                const auto source = s.parseKeystroke(sourceName);
+                const auto destination = s.parseKeystroke(destinationName);
+                if (source.m_mask != 0 || destination.m_mask != 0 ||
+                    !addKeyMapping(screen, source.m_key, destination.m_key)) {
+                    throw XConfigRead(s, "keyMap requires two unmodified keys");
+                }
 			}
 			else {
 				// unknown argument
@@ -1662,6 +1738,9 @@ Config::Cell::operator==(const Cell& x) const
 	if (m_options != x.m_options) {
 		return false;
 	}
+	if (m_keyMappings != x.m_keyMappings) {
+		return false;
+	}
 
 	// compare links
 	if (m_neighbors.size() != x.m_neighbors.size()) {
@@ -1732,6 +1811,13 @@ operator<<(std::ostream& s, const Config& config)
 				if (name != nullptr && !value.empty()) {
                     s << "\t\t" << name << " = " << value << "\n";
 				}
+			}
+		}
+		const Config::KeyMappings* mappings = config.getKeyMappings(*screen);
+		if (mappings != nullptr) {
+			for (const auto& mapping : *mappings) {
+				s << "\t\tkeyMap = " << KeyMap::formatKey(mapping.first, 0)
+				  << " " << KeyMap::formatKey(mapping.second, 0) << "\n";
 			}
 		}
 	}

@@ -453,7 +453,8 @@ void Server::switchScreen(BaseClientProxy* dst, std::int32_t x, std::int32_t y, 
 
 		// enter new screen
 		m_active->enter(x, y, m_seqNum,
-								m_primaryClient->getToggleMask(),
+								m_config->mapModifierMask(getName(m_active),
+								                          m_primaryClient->getToggleMask()),
 								forScreensaver);
 
 		if (m_enableClipboard) {
@@ -1559,7 +1560,9 @@ Server::onKeyDown(KeyID id, KeyModifierMask mask, KeyButton button,
 
 	// relay
 	if (!m_keyboardBroadcasting && IKeyState::KeyInfo::isDefault(screens)) {
-		m_active->keyDown(id, mask, button);
+		const auto screen = getName(m_active);
+		m_active->keyDown(m_config->mapKey(screen, id),
+		                  m_config->mapModifierMask(screen, mask), button);
 	}
 	else {
 		if (!screens && m_keyboardBroadcasting) {
@@ -1568,9 +1571,10 @@ Server::onKeyDown(KeyID id, KeyModifierMask mask, KeyButton button,
 				screens = "*";
 			}
 		}
-        for (auto index = m_clients.begin(); index != m_clients.end(); ++index) {
+		for (auto index = m_clients.begin(); index != m_clients.end(); ++index) {
 			if (IKeyState::KeyInfo::contains(screens, index->first)) {
-				index->second->keyDown(id, mask, button);
+				index->second->keyDown(m_config->mapKey(index->first, id),
+				                       m_config->mapModifierMask(index->first, mask), button);
 			}
 		}
 	}
@@ -1585,7 +1589,9 @@ Server::onKeyUp(KeyID id, KeyModifierMask mask, KeyButton button,
 
 	// relay
 	if (!m_keyboardBroadcasting && IKeyState::KeyInfo::isDefault(screens)) {
-		m_active->keyUp(id, mask, button);
+		const auto screen = getName(m_active);
+		m_active->keyUp(m_config->mapKey(screen, id),
+		                m_config->mapModifierMask(screen, mask), button);
 	}
 	else {
 		if (!screens && m_keyboardBroadcasting) {
@@ -1594,9 +1600,10 @@ Server::onKeyUp(KeyID id, KeyModifierMask mask, KeyButton button,
 				screens = "*";
 			}
 		}
-        for (auto index = m_clients.begin(); index != m_clients.end(); ++index) {
+		for (auto index = m_clients.begin(); index != m_clients.end(); ++index) {
 			if (IKeyState::KeyInfo::contains(screens, index->first)) {
-				index->second->keyUp(id, mask, button);
+				index->second->keyUp(m_config->mapKey(index->first, id),
+				                     m_config->mapModifierMask(index->first, mask), button);
 			}
 		}
 	}
@@ -1608,7 +1615,9 @@ void Server::onKeyRepeat(KeyID id, KeyModifierMask mask, std::int32_t count, Key
 	assert(m_active != nullptr);
 
 	// relay
-	m_active->keyRepeat(id, mask, count, button);
+	const auto screen = getName(m_active);
+	m_active->keyRepeat(m_config->mapKey(screen, id),
+	                    m_config->mapModifierMask(screen, mask), count, button);
 }
 
 void

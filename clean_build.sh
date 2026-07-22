@@ -18,7 +18,8 @@ B_CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${B_BUILD_TYPE} ${B_CMAKE_FLAGS:-}"
 if [ "$(uname)" = "Darwin" ]; then
     # macOS needs a little help, so we source this environment script to fix paths.
     [ -e ./macos_environment.sh ] && . ./macos_environment.sh
-    B_CMAKE_FLAGS="${B_CMAKE_FLAGS} -DCMAKE_OSX_SYSROOT=$(xcrun --sdk macosx --show-sdk-path) -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9"
+    B_OSX_DEPLOYMENT_TARGET="${B_OSX_DEPLOYMENT_TARGET:-10.9}"
+    B_CMAKE_FLAGS="${B_CMAKE_FLAGS} -DCMAKE_OSX_SYSROOT=$(xcrun --sdk macosx --show-sdk-path) -DCMAKE_OSX_DEPLOYMENT_TARGET=${B_OSX_DEPLOYMENT_TARGET}"
 fi
 
 # Prefer ninja if available
@@ -34,9 +35,22 @@ set -e
 # Initialise Git submodules
 git submodule update --init --recursive
 
-rm -rf ${B_BUILD_DIR}
-mkdir ${B_BUILD_DIR}
-cd ${B_BUILD_DIR}
+case "/$B_BUILD_DIR/" in
+    "//"|"///"|"/./"|*"/../"*)
+        echo "ERROR: Refusing to remove unsafe build directory '$B_BUILD_DIR'."
+        exit 1
+        ;;
+esac
+case "$B_BUILD_DIR" in
+    /*)
+        echo "ERROR: Build directory must be inside the project."
+        exit 1
+        ;;
+esac
+
+rm -rf -- "$B_BUILD_DIR"
+mkdir -p -- "$B_BUILD_DIR"
+cd -- "$B_BUILD_DIR"
 echo "Starting Input Leap $B_BUILD_TYPE build in '${B_BUILD_DIR}'..."
 "$B_CMAKE" $B_CMAKE_FLAGS ..
 "$B_CMAKE" --build . --parallel

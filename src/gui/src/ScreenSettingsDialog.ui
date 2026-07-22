@@ -332,18 +332,12 @@
           </item>
          </widget>
         </item>
-        <item row="5" column="0">
-         <spacer>
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
+        <item row="5" column="0" colspan="2">
+         <widget class="QPushButton" name="m_pButtonKeyboardSettings">
+          <property name="text">
+           <string>Keyboard settings...</string>
           </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>40</height>
-           </size>
-          </property>
-         </spacer>
+         </widget>
         </item>
        </layout>
       </widget>

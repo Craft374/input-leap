@@ -338,21 +338,22 @@ Client::resetOptions()
 void
 Client::setOptions(const OptionsList& options)
 {
-    for (auto index = options.begin(); index != options.end(); ++index) {
-        const OptionID id       = *index;
+    for (auto index = options.begin(); index != options.end();) {
+        const OptionID id = *index++;
+        if (index == options.end()) {
+            LOG_WARN("ignoring option without a value");
+            break;
+        }
+        const OptionValue value = static_cast<OptionValue>(*index++);
+
         if (id == kOptionClipboardSharing) {
-            index++;
-            if (*index == static_cast<OptionValue>(false)) {
+            if (value == static_cast<OptionValue>(false)) {
                 LOG_NOTE("clipboard sharing is disabled");
             }
-            m_enableClipboard = *index;
-
-            break;
-        } else if (id == kOptionClipboardSharingSize) {
-            index++;
-            if (index != options.end()) {
-                m_maximumClipboardSize = *index;
-            }
+            m_enableClipboard = value != 0;
+        }
+        else if (id == kOptionClipboardSharingSize) {
+            m_maximumClipboardSize = value > 0 ? static_cast<size_t>(value) : 0;
         }
     }
 

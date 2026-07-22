@@ -62,6 +62,7 @@ namespace and must be unique.
 class Config {
 public:
     typedef std::map<OptionID, OptionValue> ScreenOptions;
+    typedef std::map<KeyID, KeyID> KeyMappings;
     typedef std::pair<float, float> Interval;
 
     class CellEdge {
@@ -142,6 +143,7 @@ private:
 
     public:
         ScreenOptions m_options;
+        KeyMappings m_keyMappings;
     };
     typedef std::map<std::string, Cell, inputleap::string::CaselessCmp> CellMap;
     typedef std::map<std::string, std::string, inputleap::string::CaselessCmp> NameMap;
@@ -305,6 +307,9 @@ public:
     */
     bool removeOptions(const std::string& name);
 
+    //! Add or replace a key mapping for a screen
+    bool addKeyMapping(const std::string& name, KeyID source, KeyID destination);
+
     // Note, that the list of rules may be modified
     virtual std::vector<InputFilter::Rule>& get_input_filter_rules()
     {
@@ -390,6 +395,15 @@ public:
     options.
     */
     const ScreenOptions* getOptions(const std::string& name) const;
+
+    //! Get all key mappings for a screen
+    const KeyMappings* getKeyMappings(const std::string& name) const;
+
+    //! Apply the key mapping configured for a screen
+    KeyID mapKey(const std::string& name, KeyID key) const;
+
+    //! Remove modifier state whose source keys are remapped for a screen
+    KeyModifierMask mapModifierMask(const std::string& name, KeyModifierMask mask) const;
 
     //! Check for lock to screen action
     /*!

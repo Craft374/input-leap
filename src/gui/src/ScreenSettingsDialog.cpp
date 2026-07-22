@@ -19,6 +19,7 @@
 #include "ScreenSettingsDialog.h"
 #include "ui_ScreenSettingsDialog.h"
 
+#include "KeyboardSettingsDialog.h"
 #include "Screen.h"
 
 #include <QtCore>
@@ -50,7 +51,8 @@ static QString check_name_param(QString name)
 ScreenSettingsDialog::ScreenSettingsDialog(QWidget* parent, Screen* pScreen) :
     QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint),
     ui_{std::make_unique<Ui::ScreenSettingsDialog>()},
-    m_pScreen(pScreen)
+    m_pScreen(pScreen),
+    m_KeyMappings(pScreen->keyMappings())
 {
     ui_->setupUi(this);
 
@@ -101,14 +103,9 @@ void ScreenSettingsDialog::accept()
         return;
     }
 
-    m_pScreen->init();
-
-    m_pScreen->setName(ui_->m_pLineEditName->text());
-
     for (int i = 0; i < ui_->m_pListAliases->count(); i++)
     {
-        QString alias(ui_->m_pListAliases->item(i)->text());
-        if (alias == ui_->m_pLineEditName->text())
+        if (ui_->m_pListAliases->item(i)->text() == ui_->m_pLineEditName->text())
         {
             QMessageBox::warning(
                 this, tr("Screen name matches alias"),
@@ -116,6 +113,14 @@ void ScreenSettingsDialog::accept()
                    "Please either remove the alias or change the screen name."));
             return;
         }
+    }
+
+    m_pScreen->init();
+    m_pScreen->setName(ui_->m_pLineEditName->text());
+
+    for (int i = 0; i < ui_->m_pListAliases->count(); i++)
+    {
+        const QString alias(ui_->m_pListAliases->item(i)->text());
         m_pScreen->addAlias(alias);
     }
 
@@ -129,6 +134,7 @@ void ScreenSettingsDialog::accept()
                            static_cast<Screen::Modifier>(ui_->m_pComboBoxMeta->currentIndex()));
     m_pScreen->setModifier(Screen::Modifier::Super,
                            static_cast<Screen::Modifier>(ui_->m_pComboBoxSuper->currentIndex()));
+    m_pScreen->keyMappings() = m_KeyMappings;
 
     m_pScreen->setSwitchCorner(Screen::SwitchCorner::TopLeft, ui_->m_pCheckBoxCornerTopLeft->isChecked());
     m_pScreen->setSwitchCorner(Screen::SwitchCorner::TopRight, ui_->m_pCheckBoxCornerTopRight->isChecked());
@@ -170,6 +176,29 @@ void ScreenSettingsDialog::on_m_pButtonRemoveAlias_clicked()
 void ScreenSettingsDialog::on_m_pListAliases_itemSelectionChanged()
 {
     ui_->m_pButtonRemoveAlias->setEnabled(!ui_->m_pListAliases->selectedItems().isEmpty());
+}
+
+void ScreenSettingsDialog::on_m_pButtonKeyboardSettings_clicked()
+{
+    const QList<Screen::Modifier> modifiers = {
+        static_cast<Screen::Modifier>(ui_->m_pComboBoxShift->currentIndex()),
+        static_cast<Screen::Modifier>(ui_->m_pComboBoxCtrl->currentIndex()),
+        static_cast<Screen::Modifier>(ui_->m_pComboBoxAlt->currentIndex()),
+        static_cast<Screen::Modifier>(ui_->m_pComboBoxMeta->currentIndex()),
+        static_cast<Screen::Modifier>(ui_->m_pComboBoxSuper->currentIndex())
+    };
+    KeyboardSettingsDialog dialog(this, modifiers, m_KeyMappings);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const auto& updated = dialog.modifiers();
+    ui_->m_pComboBoxShift->setCurrentIndex(static_cast<int>(updated[0]));
+    ui_->m_pComboBoxCtrl->setCurrentIndex(static_cast<int>(updated[1]));
+    ui_->m_pComboBoxAlt->setCurrentIndex(static_cast<int>(updated[2]));
+    ui_->m_pComboBoxMeta->setCurrentIndex(static_cast<int>(updated[3]));
+    ui_->m_pComboBoxSuper->setCurrentIndex(static_cast<int>(updated[4]));
+    m_KeyMappings = dialog.keyMappings();
 }
 
 ScreenSettingsDialog::~ScreenSettingsDialog() = default;

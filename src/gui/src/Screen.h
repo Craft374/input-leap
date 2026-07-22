@@ -21,6 +21,7 @@
 #include <QPixmap>
 #include <QString>
 #include <QList>
+#include <QMap>
 #include <QStringList>
 
 #include "BaseConfig.h"
@@ -60,6 +61,7 @@ class Screen : public BaseConfig
         int switchCornerSize() const { return m_SwitchCornerSize; }
         bool fix(Fix f) const { return m_Fixes[static_cast<int>(f)]; }
         const QList<bool>& fixes() const { return m_Fixes; }
+        const QMap<QString, QString>& keyMappings() const { return m_KeyMappings; }
 
         void loadSettings(QSettings& settings);
         void saveSettings(QSettings& settings) const;
@@ -84,6 +86,7 @@ class Screen : public BaseConfig
         void setSwitchCornerSize(int val) { m_SwitchCornerSize = val; }
         void setFix(Fix f, bool on) { m_Fixes[static_cast<int>(f)] = on; }
         QList<bool>& fixes() { return m_Fixes; }
+        QMap<QString, QString>& keyMappings() { return m_KeyMappings; }
         void setSwapped(bool on) { m_Swapped = on; }
 
     private:
@@ -95,6 +98,7 @@ class Screen : public BaseConfig
         QList<bool> m_SwitchCorners;
         int m_SwitchCornerSize;
         QList<bool> m_Fixes;
+        QMap<QString, QString> m_KeyMappings;
 
         bool m_Swapped;
 };

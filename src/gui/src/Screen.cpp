@@ -43,6 +43,7 @@ void Screen::init()
     modifiers().clear();
     switchCorners().clear();
     fixes().clear();
+    keyMappings().clear();
     setSwitchCornerSize(0);
 
     // m_Modifiers, m_SwitchCorners and m_Fixes are QLists we use like fixed-size arrays,
@@ -59,6 +60,7 @@ void Screen::init()
 
 void Screen::loadSettings(QSettings& settings)
 {
+    keyMappings().clear();
     setName(settings.value("name").toString());
 
     if (name().isEmpty())
@@ -72,6 +74,17 @@ void Screen::loadSettings(QSettings& settings)
     readSettings<bool>(settings, switchCorners(), "switchCorner", false,
                        static_cast<int>(SwitchCorner::Count));
     readSettings<bool>(settings, fixes(), "fix", false, static_cast<int>(Fix::Count));
+
+    const int mappingCount = settings.beginReadArray("keyMappingArray");
+    for (int i = 0; i < mappingCount; ++i) {
+        settings.setArrayIndex(i);
+        const QString source = settings.value("source").toString();
+        const QString destination = settings.value("destination").toString();
+        if (!source.isEmpty() && !destination.isEmpty() && source != destination) {
+            keyMappings().insert(source, destination);
+        }
+    }
+    settings.endArray();
 }
 
 void Screen::saveSettings(QSettings& settings) const
@@ -87,6 +100,15 @@ void Screen::saveSettings(QSettings& settings) const
     writeSettings<int>(settings, modifiers(), "modifier");
     writeSettings<bool>(settings, switchCorners(), "switchCorner");
     writeSettings<bool>(settings, fixes(), "fix");
+
+    settings.beginWriteArray("keyMappingArray");
+    int mappingIndex = 0;
+    for (auto mapping = keyMappings().cbegin(); mapping != keyMappings().cend(); ++mapping) {
+        settings.setArrayIndex(mappingIndex++);
+        settings.setValue("source", mapping.key());
+        settings.setValue("destination", mapping.value());
+    }
+    settings.endArray();
 }
 
 QTextStream& Screen::writeScreensSection(QTextStream& outStream) const
@@ -115,6 +137,10 @@ QTextStream& Screen::writeScreensSection(QTextStream& outStream) const
     outStream << "\n";
 
     outStream << "\t\t" << "switchCornerSize = " << switchCornerSize() << "\n";
+
+    for (auto mapping = keyMappings().cbegin(); mapping != keyMappings().cend(); ++mapping) {
+        outStream << "\t\tkeyMap = " << mapping.key() << " " << mapping.value() << "\n";
+    }
 
     return outStream;
 }
@@ -147,19 +173,21 @@ QDataStream& operator<<(QDataStream& outStream, const Screen& screen)
         << modifiers
         << screen.switchCorners()
         << screen.fixes()
+        << screen.keyMappings()
         ;
 }
 
 QDataStream& operator>>(QDataStream& inStream, Screen& screen)
 {
     QList<int> modifiers;
-    return inStream
+    inStream
         >> screen.m_Name
         >> screen.m_SwitchCornerSize
         >> screen.m_Aliases
         >> modifiers
         >> screen.m_SwitchCorners
         >> screen.m_Fixes
+        >> screen.m_KeyMappings
         ;
 
     screen.m_Modifiers.clear();

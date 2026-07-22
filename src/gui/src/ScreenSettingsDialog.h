@@ -19,10 +19,11 @@
 #pragma once
 
 #include <QDialog>
+#include <QMap>
+#include <QString>
 #include <memory>
 
 class QWidget;
-class QString;
 
 class Screen;
 namespace Ui
@@ -46,8 +47,10 @@ class ScreenSettingsDialog : public QDialog
         void on_m_pButtonRemoveAlias_clicked();
         void on_m_pLineEditAlias_textChanged(const QString& text);
         void on_m_pListAliases_itemSelectionChanged();
+        void on_m_pButtonKeyboardSettings_clicked();
 
     private:
         std::unique_ptr<Ui::ScreenSettingsDialog> ui_;
         Screen* m_pScreen;
+        QMap<QString, QString> m_KeyMappings;
 };

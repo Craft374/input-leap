@@ -19,6 +19,7 @@
 #include "platform/OSXClipboard.h"
 
 #include "inputleap/Clipboard.h"
+#include "platform/OSXClipboardUTF8Converter.h"
 #include "platform/OSXClipboardUTF16Converter.h"
 #include "platform/OSXClipboardTextConverter.h"
 #include "platform/OSXClipboardBMPConverter.h"
@@ -34,6 +35,7 @@ OSXClipboard::OSXClipboard() :
 {
     m_converters.push_back(new OSXClipboardHTMLConverter);
     m_converters.push_back(new OSXClipboardBMPConverter);
+    m_converters.push_back(new OSXClipboardUTF8Converter);
     m_converters.push_back(new OSXClipboardUTF16Converter);
     m_converters.push_back(new OSXClipboardTextConverter);
 
@@ -118,14 +120,22 @@ void OSXClipboard::add(EFormat format, const std::string& data)
                                              osXData.size());
             PasteboardItemID itemID = 0;
 
-            PasteboardPutItemFlavor(
-                m_pboard,
-                itemID,
-                flavorType,
-                dataRef,
-                kPasteboardFlavorNoFlags);
+            if (dataRef != nullptr) {
+                const OSStatus result = PasteboardPutItemFlavor(
+                    m_pboard,
+                    itemID,
+                    flavorType,
+                    dataRef,
+                    kPasteboardFlavorNoFlags);
+                CFRelease(dataRef);
 
-            LOG_DEBUG("added %zd bytes to clipboard format: %d", data.size(), format);
+                if (result == noErr) {
+                    LOG_DEBUG("added %zd bytes to clipboard format: %d", data.size(), format);
+                }
+                else {
+                    LOG_DEBUG("failed to add clipboard format %d: error %i", format, result);
+                }
+            }
         }
 
     }
