@@ -66,7 +66,7 @@ KeyboardSettingsDialog::KeyboardSettingsDialog(
     }
 
     auto* presetButton = new QPushButton(
-        tr("Preset: Ctrl to Command, Windows to Control"), modifierGroup);
+        tr("Preset: Alt to Command, Windows to Option"), modifierGroup);
     connect(presetButton, &QPushButton::clicked, this,
             &KeyboardSettingsDialog::applyWindowsMacPreset);
     modifierLayout->addWidget(presetButton, 6, 0);
@@ -195,12 +195,13 @@ void KeyboardSettingsDialog::addMappingRow(const QString& source, const QString&
 
 void KeyboardSettingsDialog::applyWindowsMacPreset()
 {
-    m_ModifierBoxes[static_cast<int>(Screen::Modifier::Ctrl)]->setCurrentIndex(
-        static_cast<int>(Screen::Modifier::Super));
+    // Swap Alt and the Windows key so the mac client sees them where a mac
+    // keyboard has them: Alt sits next to the space bar like Command does.
+    resetModifiers();
     m_ModifierBoxes[static_cast<int>(Screen::Modifier::Alt)]->setCurrentIndex(
-        static_cast<int>(Screen::Modifier::Alt));
+        static_cast<int>(Screen::Modifier::Super));
     m_ModifierBoxes[static_cast<int>(Screen::Modifier::Super)]->setCurrentIndex(
-        static_cast<int>(Screen::Modifier::Ctrl));
+        static_cast<int>(Screen::Modifier::Alt));
 }
 
 void KeyboardSettingsDialog::resetModifiers()
