@@ -77,7 +77,6 @@ private:
     int m_processFailures;
     bool m_processRunning;
     FileLogOutputter* m_fileLogOutputter;
-    bool m_autoElevated;
     bool m_daemonized;
 };
 

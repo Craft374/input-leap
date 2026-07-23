@@ -46,21 +46,6 @@ enum {
 
 typedef VOID (WINAPI *SendSas)(BOOL asUser);
 
-std::string activeDesktopName()
-{
-    const std::size_t BufferLength = 1024;
-    std::string name;
-    HDESK desk = OpenInputDesktop(0, FALSE, GENERIC_READ);
-    if (desk != nullptr) {
-        TCHAR buffer[BufferLength];
-        if (GetUserObjectInformation(desk, UOI_NAME, buffer, BufferLength - 1, nullptr) == TRUE)
-            name = buffer;
-        CloseDesktop(desk);
-    }
-    LOG_DEBUG("found desktop name: %.64s", name.c_str());
-    return name;
-}
-
 MSWindowsWatchdog::MSWindowsWatchdog(
     bool daemonized,
     bool autoDetectCommand,
@@ -78,7 +63,6 @@ MSWindowsWatchdog::MSWindowsWatchdog(
     m_processFailures(0),
     m_processRunning(false),
     m_fileLogOutputter(nullptr),
-    m_autoElevated(false),
     m_daemonized(daemonized)
 {
 }
@@ -136,24 +120,28 @@ MSWindowsWatchdog::duplicateProcessToken(HANDLE process, LPSECURITY_ATTRIBUTES s
 HANDLE
 MSWindowsWatchdog::getUserToken(LPSECURITY_ATTRIBUTES security)
 {
-    // always elevate if we are at the vista/7 login screen. we could also
-    // elevate for the uac dialog (consent.exe) but this would be pointless,
-    // since InputLeap would re-launch as non-elevated after the desk switch,
-    // and so would be unusable with the new elevated process taking focus.
-    if (m_elevateProcess || m_autoElevated) {
-        LOG_DEBUG("getting elevated token, %s",
-            (m_elevateProcess ? "elevation required" : "at login screen"));
-
-        HANDLE process;
-        if (!m_session.isProcessInSession("winlogon.exe", &process)) {
-            throw XMSWindowsWatchdogError("cannot get user token without winlogon.exe");
+    // Prefer the logged-in user's token: an elevated (SYSTEM) server cannot read
+    // that user's clipboard. WTSQueryUserToken() fails exactly when nobody is
+    // logged into the session, i.e. at the login screen, which is the one case
+    // that needs winlogon.exe's token instead. (Probing the desktop name is
+    // useless here - OpenInputDesktop() only sees the service's own station.)
+    if (!m_elevateProcess) {
+        try {
+            LOG_DEBUG("getting non-elevated token");
+            return m_session.getUserToken(security);
         }
-
-        return duplicateProcessToken(process, security);
-    } else {
-        LOG_DEBUG("getting non-elevated token");
-        return m_session.getUserToken(security);
+        catch (const std::exception& e) {
+            LOG_DEBUG("no user token (%s), falling back to elevated token", e.what());
+        }
     }
+
+    LOG_DEBUG("getting elevated token");
+    HANDLE process;
+    if (!m_session.isProcessInSession("winlogon.exe", &process)) {
+        throw XMSWindowsWatchdogError("cannot get user token without winlogon.exe");
+    }
+
+    return duplicateProcessToken(process, security);
 }
 
 void MSWindowsWatchdog::main_loop()
@@ -285,14 +273,8 @@ MSWindowsWatchdog::startProcess()
     if (!m_daemonized) {
         createRet = doStartProcessAsSelf(m_command);
     } else {
-        m_autoElevated = activeDesktopName() != "Default";
-
         SECURITY_ATTRIBUTES sa{ 0 };
         HANDLE userToken = getUserToken(&sa);
-        // getUserToken() honours m_autoElevated for this launch only: latching it
-        // into m_elevateProcess leaves the server running as SYSTEM forever, and a
-        // SYSTEM server cannot read the logged-in user's clipboard.
-        m_autoElevated = false;
 
         // patch by Jack Zhou and Henry Tung
         // set UIAccess to fix Windows 8 GUI interaction
