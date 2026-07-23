@@ -26,37 +26,7 @@
 #include "arch/win32/ArchMiscWindows.h"
 #include "base/Log.h"
 
-#include <string>
-
 namespace inputleap {
-
-namespace {
-
-// The clipboard belongs to a window station, not a process. A server running in
-// the wrong station still reports its own writes as successful but always reads
-// back an empty clipboard, so log both the station and what is actually on it.
-void log_clipboard_contents()
-{
-    char station[128] = "?";
-    DWORD length = 0;
-    GetUserObjectInformationA(GetProcessWindowStation(), UOI_NAME,
-                              station, sizeof(station), &length);
-
-    std::string formats;
-    for (UINT format = EnumClipboardFormats(0); format != 0;
-         format = EnumClipboardFormats(format)) {
-        char name[128];
-        formats += " " + std::to_string(format);
-        if (GetClipboardFormatNameA(format, name, sizeof(name)) > 0) {
-            formats += std::string("(") + name + ")";
-        }
-    }
-
-    LOG_DEBUG("clipboard station=%s formats:%s", station,
-              formats.empty() ? " <none>" : formats.c_str());
-}
-
-} // namespace
 
 UINT                    MSWindowsClipboard::s_ownershipFormat = 0;
 
@@ -157,7 +127,6 @@ MSWindowsClipboard::open(Time time) const
     for (int attempt = 1; attempt <= kMaxRetries; ++attempt) {
         if (OpenClipboard(m_window)) {
             m_time = time;
-            log_clipboard_contents();
             return true;
         }
 

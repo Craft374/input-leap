@@ -1454,12 +1454,6 @@ MSWindowsScreen::onDisplayChange()
 bool
 MSWindowsScreen::onClipboardChange()
 {
-    // Log every change, not just ownership flips: a copy that leaves no text
-    // format behind is invisible in the branches below.
-    LOG_DEBUG("clipboard change: ours=%d text=%d tracked=%d",
-              MSWindowsClipboard::is_owned_by_us(),
-              IsClipboardFormatAvailable(CF_UNICODETEXT), m_ownClipboard);
-
     // now notify client that somebody changed the clipboard (unless
     // we're the owner).
     if (!MSWindowsClipboard::is_owned_by_us()) {
