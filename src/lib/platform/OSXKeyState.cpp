@@ -291,7 +291,18 @@ OSXKeyState::mapKeyFromEvent(KeyIDs& ids,
     // translate via uchr resource
     CFDataRef ref = (CFDataRef) TISGetInputSourceProperty(currentKeyboardLayout,
                                 kTISPropertyUnicodeKeyLayoutData);
-    const UCKeyboardLayout* layout = (const UCKeyboardLayout*) CFDataGetBytePtr(ref);
+    // An input method (e.g. Korean/Japanese IME) carries no uchr layout data,
+    // so ref is null and every character key would translate to nothing.
+    // Fall back to the ASCII-capable layout so plain keys still map.
+    if (ref == nullptr) {
+        currentKeyboardLayout = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
+        if (currentKeyboardLayout != nullptr) {
+            ref = (CFDataRef) TISGetInputSourceProperty(currentKeyboardLayout,
+                                kTISPropertyUnicodeKeyLayoutData);
+        }
+    }
+    const UCKeyboardLayout* layout = (ref != nullptr) ?
+        (const UCKeyboardLayout*) CFDataGetBytePtr(ref) : nullptr;
     const bool layoutValid = (layout != nullptr);
 
     if (layoutValid) {

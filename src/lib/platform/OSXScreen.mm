@@ -1197,6 +1197,17 @@ OSXScreen::onKey(CGEventRef event)
 
 	// Special handling to track state of modifiers
 	if (eventKind == kCGEventFlagsChanged) {
+		// Right Command acts as a Hangul/English toggle for the Windows
+		// client's Korean IME; it is never forwarded as a Command modifier.
+		// NX_DEVICERCMDKEYMASK (0x10) tells us the right Command specifically
+		// is down, independent of the left Command.
+		if (virtualKey == kVK_RightCommand) {
+			bool down = (macMask & 0x10) != 0;
+			m_keyState->sendKeyEvent(get_event_target(), down, false,
+									 kKeyHangul, 0, 1, 0);
+			return true;
+		}
+
 		// get old and new modifier state
 		KeyModifierMask oldMask = getActiveModifiers();
 		KeyModifierMask newMask = m_keyState->mapModifiersFromOSX(macMask);
