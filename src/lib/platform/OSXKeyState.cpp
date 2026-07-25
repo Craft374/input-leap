@@ -256,6 +256,11 @@ OSXKeyState::mapKeyFromEvent(KeyIDs& ids,
     // get keyboard info
     TISInputSourceRef currentKeyboardLayout = TISCopyCurrentKeyboardLayoutInputSource();
 
+    // An input method (e.g. Korean/Japanese IME) can have no keyboard
+    // layout at all; same ASCII-capable fallback as the uchr check below.
+    if (currentKeyboardLayout == nullptr) {
+        currentKeyboardLayout = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
+    }
     if (currentKeyboardLayout == nullptr) {
         return kKeyNone;
     }
