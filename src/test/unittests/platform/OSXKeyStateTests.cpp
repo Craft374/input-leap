@@ -86,4 +86,23 @@ TEST(OSXKeyStateTests, mapKeyFromEvent_extendedFunctionKeys)
     }
 }
 
+TEST(OSXKeyStateTests, mapKeyFromEvent_printableKey)
+{
+    inputleap::KeyMap keyMap;
+    MockEventQueue eventQueue;
+    OSXKeyState keyState(&eventQueue, keyMap);
+
+    CGEventRef event = CGEventCreateKeyboardEvent(nullptr, kVK_ANSI_R, true);
+    ASSERT_NE(nullptr, event);
+
+    OSXKeyState::KeyIDs ids;
+    KeyModifierMask mask = 0;
+    KeyButton button = keyState.mapKeyFromEvent(ids, &mask, event);
+    CFRelease(event);
+
+    EXPECT_NE(0, button);
+    ASSERT_EQ(1u, ids.size());
+    EXPECT_NE(kKeyNone, ids.front());
+}
+
 } // namespace inputleap

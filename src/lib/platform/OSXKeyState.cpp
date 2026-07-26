@@ -253,18 +253,6 @@ OSXKeyState::mapKeyFromEvent(KeyIDs& ids,
         return mapVirtualKeyToKeyButton(vkCode);
     }
 
-    // get keyboard info
-    TISInputSourceRef currentKeyboardLayout = TISCopyCurrentKeyboardLayoutInputSource();
-
-    // An input method (e.g. Korean/Japanese IME) can have no keyboard
-    // layout at all; same ASCII-capable fallback as the uchr check below.
-    if (currentKeyboardLayout == nullptr) {
-        currentKeyboardLayout = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
-    }
-    if (currentKeyboardLayout == nullptr) {
-        return kKeyNone;
-    }
-
     // get the event modifiers and remove the command and control
     // keys.  note if we used them though.
     // UCKeyTranslate expects old-style Carbon modifiers, so convert.
@@ -293,49 +281,45 @@ OSXKeyState::mapKeyFromEvent(KeyIDs& ids,
         return 0;
     }
 
-    // translate via uchr resource
-    CFDataRef ref = (CFDataRef) TISGetInputSourceProperty(currentKeyboardLayout,
-                                kTISPropertyUnicodeKeyLayoutData);
-    // An input method (e.g. Korean/Japanese IME) carries no uchr layout data,
-    // so ref is null and every character key would translate to nothing.
-    // Fall back to the ASCII-capable layout so plain keys still map.
-    if (ref == nullptr) {
-        currentKeyboardLayout = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
-        if (currentKeyboardLayout != nullptr) {
-            ref = (CFDataRef) TISGetInputSourceProperty(currentKeyboardLayout,
-                                kTISPropertyUnicodeKeyLayoutData);
-        }
-    }
-    const UCKeyboardLayout* layout = (ref != nullptr) ?
-        (const UCKeyboardLayout*) CFDataGetBytePtr(ref) : nullptr;
-    const bool layoutValid = (layout != nullptr);
-
-    if (layoutValid) {
-        // translate key
-        UniCharCount count;
-        UniChar chars[2];
-        LOG_DEBUG2("modifiers: %08x", modifiers & 0xffu);
-        OSStatus status = UCKeyTranslate(layout,
-                            vkCode & 0xffu, action,
-                            (modifiers >> 8) & 0xffu,
-                            LMGetKbdType(), 0, &m_deadKeyState,
-                            sizeof(chars) / sizeof(chars[0]), &count, chars);
-
-        // get the characters
-        if (status == 0) {
-            if (count != 0 || m_deadKeyState == 0) {
-                m_deadKeyState = 0;
-                for (UniCharCount i = 0; i < count; ++i) {
-                    ids.push_back(IOSXKeyResource::unicharToKeyID(chars[i]));
-                }
-                adjustAltGrModifier(ids, maskOut, isCommand);
-                return mapVirtualKeyToKeyButton(vkCode);
-            }
-            return 0;
-        }
+    // Input methods such as Korean do not describe the physical key's
+    // printable character.  Translate with their ASCII-capable layout so the
+    // client receives the key position and applies its own input method.
+    TISInputSourceRef keyboardLayout =
+        TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
+    if (keyboardLayout == nullptr) {
+        return kKeyNone;
     }
 
-    return 0;
+    CFDataRef ref = (CFDataRef)TISGetInputSourceProperty(
+        keyboardLayout, kTISPropertyUnicodeKeyLayoutData);
+    const UCKeyboardLayout* layout =
+        ref == nullptr ? nullptr :
+        (const UCKeyboardLayout*)CFDataGetBytePtr(ref);
+    if (layout == nullptr) {
+        CFRelease(keyboardLayout);
+        return 0;
+    }
+
+    UniCharCount count;
+    UniChar chars[2];
+    LOG_DEBUG2("modifiers: %08x", modifiers & 0xffu);
+    OSStatus status = UCKeyTranslate(layout,
+                        vkCode & 0xffu, action,
+                        (modifiers >> 8) & 0xffu,
+                        LMGetKbdType(), 0, &m_deadKeyState,
+                        sizeof(chars) / sizeof(chars[0]), &count, chars);
+    CFRelease(keyboardLayout);
+
+    if (status != 0 || (count == 0 && m_deadKeyState != 0)) {
+        return 0;
+    }
+
+    m_deadKeyState = 0;
+    for (UniCharCount i = 0; i < count; ++i) {
+        ids.push_back(IOSXKeyResource::unicharToKeyID(chars[i]));
+    }
+    adjustAltGrModifier(ids, maskOut, isCommand);
+    return mapVirtualKeyToKeyButton(vkCode);
 }
 
 bool
