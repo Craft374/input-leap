@@ -108,10 +108,13 @@ static const KeyEntry    s_controlKeys[] = {
     { kKeyControl_R,        kVK_RightControl }, // 62
     { kKeyAlt_L,                  kVK_Option }, // 58
     { kKeyAlt_R,             kVK_RightOption }, // 61
+    // Command only ever raises KeyModifierSuper (see mapModifiersFromOSX),
+    // never KeyModifierMeta. A Meta_L/R entry for the same virtual key would
+    // win this last-one-wins map and make bare Command presses identify as
+    // Meta, which has no key on the Windows side of the wire and no matching
+    // KeyModifierMeta bit on this side, silently dropping a held Command key.
     { kKeySuper_L,               kVK_Command }, // 55
     { kKeySuper_R,          kVK_RightCommand }, // 54
-    { kKeyMeta_L,                kVK_Command }, // 55
-    { kKeyMeta_R,           kVK_RightCommand }, // 54
 
     // toggle modifiers
     { kKeyNumLock,      kVK_ANSI_KeypadClear },

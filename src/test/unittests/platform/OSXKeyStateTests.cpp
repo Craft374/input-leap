@@ -86,6 +86,30 @@ TEST(OSXKeyStateTests, mapKeyFromEvent_extendedFunctionKeys)
     }
 }
 
+TEST(OSXKeyStateTests, mapKeyFromEvent_commandIsSuperNotMeta)
+{
+    inputleap::KeyMap keyMap;
+    MockEventQueue eventQueue;
+    OSXKeyState keyState(&eventQueue, keyMap);
+
+    const std::pair<CGKeyCode, KeyID> keys[] = {
+        {kVK_Command, kKeySuper_L},
+        {kVK_RightCommand, kKeySuper_R}
+    };
+    for (const auto& key : keys) {
+        CGEventRef event = CGEventCreateKeyboardEvent(nullptr, key.first, true);
+        ASSERT_NE(nullptr, event);
+
+        OSXKeyState::KeyIDs ids;
+        KeyModifierMask mask = 0;
+        keyState.mapKeyFromEvent(ids, &mask, event);
+        CFRelease(event);
+
+        ASSERT_EQ(1u, ids.size());
+        EXPECT_EQ(key.second, ids.front());
+    }
+}
+
 TEST(OSXKeyStateTests, mapKeyFromEvent_printableKey)
 {
     inputleap::KeyMap keyMap;
