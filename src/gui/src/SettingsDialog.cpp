@@ -62,18 +62,22 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
     ui_->checkbox_require_client_certificate->setChecked(app_config_.getRequireClientCertificate());
 
 #if defined(Q_OS_MAC)
-    ui_->m_pComboLocalInputDevice->addItem(tr("사용 안 함"), QString());
+    const QStringList selectedDeviceIds = app_config_.macLocalInputDevice().split(
+        QLatin1Char(','), Qt::SkipEmptyParts);
+    QSet<QString> remainingSelectedIds(selectedDeviceIds.begin(), selectedDeviceIds.end());
     for (const auto& device : macInputDevices()) {
-        ui_->m_pComboLocalInputDevice->addItem(device.name, device.id);
+        auto* item = new QListWidgetItem(device.name, ui_->m_pListLocalInputDevices);
+        item->setData(Qt::UserRole, device.id);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        const bool selected = remainingSelectedIds.remove(device.id);
+        item->setCheckState(selected ? Qt::Checked : Qt::Unchecked);
     }
-    const int deviceIndex = ui_->m_pComboLocalInputDevice->findData(app_config_.macLocalInputDevice());
-    if (deviceIndex >= 0) {
-        ui_->m_pComboLocalInputDevice->setCurrentIndex(deviceIndex);
-    }
-    else if (!app_config_.macLocalInputDevice().isEmpty()) {
-        ui_->m_pComboLocalInputDevice->addItem(
-            tr("저장된 USB 입력 장치 (현재 연결되지 않음)"), app_config_.macLocalInputDevice());
-        ui_->m_pComboLocalInputDevice->setCurrentIndex(ui_->m_pComboLocalInputDevice->count() - 1);
+    for (const auto& id : remainingSelectedIds) {
+        auto* item = new QListWidgetItem(
+            tr("저장된 USB 입력 장치 (현재 연결되지 않음): %1").arg(id), ui_->m_pListLocalInputDevices);
+        item->setData(Qt::UserRole, id);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
     }
     ui_->m_pCheckBoxMacMapFunctionKeys->setChecked(app_config_.getMacMapFunctionKeys());
 #else
@@ -115,7 +119,14 @@ void SettingsDialog::accept()
     app_config_.setAutoStart(ui_->m_pCheckBoxAutoStart->isChecked());
     app_config_.setMinimizeToTray(ui_->m_pCheckBoxMinimizeToTray->isChecked());
 #if defined(Q_OS_MAC)
-    app_config_.setMacLocalInputDevice(ui_->m_pComboLocalInputDevice->currentData().toString());
+    QStringList selectedDeviceIds;
+    for (int i = 0; i < ui_->m_pListLocalInputDevices->count(); ++i) {
+        const auto* item = ui_->m_pListLocalInputDevices->item(i);
+        if (item->checkState() == Qt::Checked) {
+            selectedDeviceIds << item->data(Qt::UserRole).toString();
+        }
+    }
+    app_config_.setMacLocalInputDevice(selectedDeviceIds.join(QLatin1Char(',')));
     app_config_.setMacMapFunctionKeys(ui_->m_pCheckBoxMacMapFunctionKeys->isChecked());
 #endif
     app_config_.saveSettings();

@@ -48,7 +48,9 @@
 #include <deque>
 #include <limits>
 #include <mach/mach_time.h>
+#include <set>
 #include <sstream>
+#include <tuple>
 
 namespace inputleap {
 
@@ -124,33 +126,49 @@ struct OSXHidEventMatch
 class OSXInputDeviceMonitor
 {
 public:
-	explicit OSXInputDeviceMonitor(const std::string& localDevice) :
+	explicit OSXInputDeviceMonitor(const std::string& localDevices) :
 		manager_(nullptr)
 	{
-		char separator1 = 0;
-		char separator2 = 0;
-		std::istringstream id(localDevice);
-		if (!(id >> localVendor_ >> separator1 >> localProduct_ >> separator2 >> localLocation_) ||
-			separator1 != ':' || separator2 != ':') {
+		std::istringstream deviceList(localDevices);
+		std::string entry;
+		CFMutableArrayRef matchingArray = CFArrayCreateMutable(
+			kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+		while (std::getline(deviceList, entry, ',')) {
+			long vendor = 0;
+			long product = 0;
+			long location = 0;
+			char separator1 = 0;
+			char separator2 = 0;
+			std::istringstream id(entry);
+			if (!(id >> vendor >> separator1 >> product >> separator2 >> location) ||
+				separator1 != ':' || separator2 != ':') {
+				continue;
+			}
+			devices_.insert({vendor, product, location});
+
+			CFMutableDictionaryRef matching = hidDeviceMatchingDictionary(vendor, product, location);
+			if (matching != nullptr) {
+				CFArrayAppendValue(matchingArray, matching);
+				CFRelease(matching);
+			}
+		}
+		if (devices_.empty()) {
+			CFRelease(matchingArray);
 			return;
 		}
 
 		manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
 		if (manager_ == nullptr) {
+			CFRelease(matchingArray);
 			return;
 		}
-		CFMutableDictionaryRef matching = hidDeviceMatchingDictionary(
-			localVendor_, localProduct_, localLocation_);
-		if (matching == nullptr) {
-			return;
-		}
-		IOHIDManagerSetDeviceMatching(manager_, matching);
-		CFRelease(matching);
+		IOHIDManagerSetDeviceMatchingMultiple(manager_, matchingArray);
+		CFRelease(matchingArray);
 		IOHIDManagerRegisterInputValueCallback(manager_, inputValueCallback, this);
 		IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
 		const IOReturn openResult = IOHIDManagerOpen(manager_, kIOHIDOptionsTypeNone);
 		if (openResult != kIOReturnSuccess) {
-			LOG_WARN("failed to monitor selected macOS input device (0x%08x)",
+			LOG_WARN("failed to monitor selected macOS input devices (0x%08x)",
 				static_cast<unsigned int>(openResult));
 		}
 	}
@@ -209,9 +227,9 @@ private:
 		const std::uint32_t usage = IOHIDElementGetUsage(element);
 		IOHIDDeviceRef device = IOHIDElementGetDevice(element);
 		const long vendor = hidDeviceNumber(device, CFSTR(kIOHIDVendorIDKey));
-		const bool local = vendor == localVendor_ &&
-			hidDeviceNumber(device, CFSTR(kIOHIDProductIDKey)) == localProduct_ &&
-			hidDeviceNumber(device, CFSTR(kIOHIDLocationIDKey)) == localLocation_;
+		const long product = hidDeviceNumber(device, CFSTR(kIOHIDProductIDKey));
+		const long location = hidDeviceNumber(device, CFSTR(kIOHIDLocationIDKey));
+		const bool local = devices_.count({vendor, product, location}) != 0;
 		const bool relevantUsage = usagePage == kHIDPage_KeyboardOrKeypad ||
 			usagePage == kHIDPage_Consumer ||
 			(usagePage == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_DoNotDisturb) ||
@@ -238,9 +256,7 @@ private:
 	}
 
 	IOHIDManagerRef manager_;
-	long localVendor_ = -1;
-	long localProduct_ = -1;
-	long localLocation_ = -1;
+	std::set<std::tuple<long, long, long>> devices_;
 	std::deque<InputEvent> events_;
 	std::set<std::uint64_t> heldLocalSystemInputs_;
 };

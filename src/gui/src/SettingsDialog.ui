@@ -150,7 +150,11 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="m_pComboLocalInputDevice"/>
+       <widget class="QListWidget" name="m_pListLocalInputDevices">
+        <property name="maximumHeight">
+         <number>96</number>
+        </property>
+       </widget>
       </item>
       <item row="1" column="0" colspan="2">
        <widget class="QCheckBox" name="m_pCheckBoxMacMapFunctionKeys">
