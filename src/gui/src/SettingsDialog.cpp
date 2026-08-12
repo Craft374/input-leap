@@ -23,6 +23,9 @@
 #include "AppLocale.h"
 #include "QUtility.h"
 #include "AppConfig.h"
+#if defined(Q_OS_MAC)
+#include "MacInputDevice.h"
+#endif
 
 #include <QtCore>
 #include <QtGui>
@@ -42,6 +45,8 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
 
     AppLocale locale;
     locale.fillLanguageComboBox(ui_->m_pComboLanguage);
+    ui_->m_pLabel_27->hide();
+    ui_->m_pComboLanguage->hide();
 
     ui_->m_pLineEditScreenName->setText(app_config_.screenName());
     ui_->m_pSpinBoxPort->setValue(app_config_.port());
@@ -55,6 +60,25 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
     ui_->m_pCheckBoxMinimizeToTray->setChecked(app_config_.getMinimizeToTray());
     ui_->m_pCheckBoxEnableCrypto->setChecked(app_config_.getCryptoEnabled());
     ui_->checkbox_require_client_certificate->setChecked(app_config_.getRequireClientCertificate());
+
+#if defined(Q_OS_MAC)
+    ui_->m_pComboLocalInputDevice->addItem(tr("사용 안 함"), QString());
+    for (const auto& device : macInputDevices()) {
+        ui_->m_pComboLocalInputDevice->addItem(device.name, device.id);
+    }
+    const int deviceIndex = ui_->m_pComboLocalInputDevice->findData(app_config_.macLocalInputDevice());
+    if (deviceIndex >= 0) {
+        ui_->m_pComboLocalInputDevice->setCurrentIndex(deviceIndex);
+    }
+    else if (!app_config_.macLocalInputDevice().isEmpty()) {
+        ui_->m_pComboLocalInputDevice->addItem(
+            tr("저장된 키보드 (현재 연결되지 않음)"), app_config_.macLocalInputDevice());
+        ui_->m_pComboLocalInputDevice->setCurrentIndex(ui_->m_pComboLocalInputDevice->count() - 1);
+    }
+    ui_->m_pCheckBoxMacMapFunctionKeys->setChecked(app_config_.getMacMapFunctionKeys());
+#else
+    ui_->m_pGroupMacInput->hide();
+#endif
 
 #if defined(Q_OS_WIN)
     ui_->m_pComboElevate->setCurrentIndex(static_cast<int>(app_config_.elevateMode()));
@@ -90,6 +114,10 @@ void SettingsDialog::accept()
     app_config_.setAutoHide(ui_->m_pCheckBoxAutoHide->isChecked());
     app_config_.setAutoStart(ui_->m_pCheckBoxAutoStart->isChecked());
     app_config_.setMinimizeToTray(ui_->m_pCheckBoxMinimizeToTray->isChecked());
+#if defined(Q_OS_MAC)
+    app_config_.setMacLocalInputDevice(ui_->m_pComboLocalInputDevice->currentData().toString());
+    app_config_.setMacMapFunctionKeys(ui_->m_pCheckBoxMacMapFunctionKeys->isChecked());
+#endif
     app_config_.saveSettings();
     QDialog::accept();
 }
@@ -138,7 +166,7 @@ void SettingsDialog::browseLogClicked()
     QString fileName = QFileDialog::getSaveFileName(
         this, tr("Save log file to..."),
         ui_->m_pLineEditLogFilename->text(),
-        "Logs (*.log *.txt)");
+        tr("로그 파일 (*.log *.txt)"));
 
     if (!fileName.isEmpty())
     {

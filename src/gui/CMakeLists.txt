@@ -8,6 +8,12 @@ set (CMAKE_AUTORCC ON)
 set (CMAKE_AUTOUIC ON)
 set (CMAKE_INCLUDE_CURRENT_DIR ON)
 
+set(QT_KOREAN_TRANSLATION "${QT_TRANSLATIONS_DIR}/qtbase_ko.qm")
+if (NOT EXISTS "${QT_KOREAN_TRANSLATION}")
+    message(FATAL_ERROR "Qt Korean translation was not found: ${QT_KOREAN_TRANSLATION}")
+endif()
+configure_file(res/QtKorean.qrc.in ${CMAKE_CURRENT_BINARY_DIR}/QtKorean.qrc @ONLY)
+
 # files that are used both in tests and the app
 set(GUI_COMMON_SOURCE_FILES
     src/Action.cpp
@@ -115,6 +121,11 @@ set(GUI_UI_FILES
     src/SetupWizard.ui
 )
 
+if (APPLE)
+    list(APPEND GUI_SOURCE_FILES src/MacInputDevice.cpp)
+    list(APPEND GUI_HEADER_FILES src/MacInputDevice.h)
+endif()
+
 set(TS_FILES
     res/lang/gui_af-ZA.ts
     res/lang/gui_ar.ts
@@ -188,6 +199,7 @@ add_executable (input-leap WIN32
     ${GUI_UI_FILES}
     ${GUI_RC_FILES}
     res/InputLeap.qrc
+    ${CMAKE_CURRENT_BINARY_DIR}/QtKorean.qrc
 )
 
 include_directories (./src)
@@ -218,7 +230,8 @@ if (BUILD_MSWINDOWS)
 endif()
 if (BUILD_CARBON)
     find_library(APPSERVICES_LIB ApplicationServices)
-    target_link_libraries(input-leap ${APPSERVICES_LIB})
+    find_library(IOKIT_LIB IOKit)
+    target_link_libraries(input-leap ${APPSERVICES_LIB} ${IOKIT_LIB})
 endif()
 if (BUILD_XWINDOWS OR BUILD_LIBEI)
     target_link_libraries (input-leap dns_sd Threads::Threads)

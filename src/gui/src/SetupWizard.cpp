@@ -55,6 +55,8 @@ SetupWizard::SetupWizard(MainWindow& mainWindow, bool startMain) :
 
     m_Locale.fillLanguageComboBox(ui_->m_pComboLanguage);
     setIndexFromItemData(ui_->m_pComboLanguage, m_MainWindow.appConfig().language());
+    ui_->label_4->hide();
+    ui_->m_pComboLanguage->hide();
 }
 
 SetupWizard::~SetupWizard() = default;

@@ -35,6 +35,7 @@
 #include <bitset>
 #include <map>
 #include <mutex>
+#include <set>
 #include <vector>
 
 namespace inputleap {
@@ -48,11 +49,13 @@ extern "C" {
 class Thread;
 class OSXKeyState;
 class OSXScreenSaver;
+class OSXInputDeviceMonitor;
 
 //! Implementation of IPlatformScreen for OS X
 class OSXScreen : public PlatformScreen {
 public:
-    OSXScreen(IEventQueue* events, bool isPrimary, bool autoShowHideCursor=true);
+    OSXScreen(IEventQueue* events, bool isPrimary, bool autoShowHideCursor=true,
+              bool mapMacFunctionKeys=false, const std::string& localInputDevice={});
     virtual ~OSXScreen();
 
     IEventQueue* getEvents() const { return m_events; }
@@ -130,6 +133,7 @@ private:
     bool onKey(CGEventRef event);
 
     void onMediaKey(CGEventRef event);
+    void onFunctionKey(int number, bool down, bool isRepeat);
 
     bool onHotKey(EventRef event) const;
 
@@ -283,6 +287,9 @@ private:
 
     // keyboard stuff
     OSXKeyState* m_keyState;
+    OSXInputDeviceMonitor* m_inputDeviceMonitor;
+    bool m_mapMacFunctionKeys;
+    std::set<std::uint32_t> m_localKeyCodes;
 
     // clipboards
     OSXClipboard m_pasteboard;

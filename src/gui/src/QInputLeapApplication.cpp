@@ -54,6 +54,18 @@ void QInputLeapApplication::switchTranslator(QString lang)
         translator_.reset();
     }
 
+    if (qt_translator_) {
+        removeTranslator(qt_translator_.get());
+        qt_translator_.reset();
+    }
+
+    lang = QStringLiteral("ko");
+    qt_translator_ = std::make_unique<QTranslator>();
+    QResource qtLocale(QStringLiteral(":/translations/qtbase_ko.qm"));
+    if (qtLocale.isValid() && qt_translator_->load(qtLocale.data(), qtLocale.size())) {
+        installTranslator(qt_translator_.get());
+    }
+
     QResource locale(":/res/lang/gui_" + lang + ".qm");
     translator_ = std::make_unique<QTranslator>();
     std::ignore = translator_->load(locale.data(), locale.size());

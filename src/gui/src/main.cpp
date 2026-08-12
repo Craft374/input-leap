@@ -72,9 +72,9 @@ int main(int argc, char* argv[])
         // Continue running.
     } else if (platformType == "wayland") {
         QMessageBox::information(nullptr, "InputLeafPlus",
-                                 "You are using Wayland. InputLeafPlus supports Wayland via `libei` "
-                                 "but not all desktop environment/window managers support our "
-                                 "implementation at this time. Therefore, your mileage may vary.");
+                                 "Wayland을 사용 중입니다. InputLeafPlus는 libei를 통해 Wayland를 "
+                                 "지원하지만, 일부 데스크톱 환경이나 창 관리자는 아직 지원되지 "
+                                 "않을 수 있습니다.");
     }
 #endif
 
@@ -102,8 +102,7 @@ int main(int argc, char* argv[])
         // /Applications). Thus we require InputLeap to reside in the /Applications
         // folder
         QMessageBox::information(nullptr, "InputLeafPlus",
-                                 "Please drag InputLeafPlus to the Applications folder, "
-                                 "and open it from there.");
+                                 "InputLeafPlus를 응용 프로그램 폴더로 옮긴 뒤 그곳에서 실행해 주세요.");
 		return 1;
 	}
 
@@ -208,9 +207,8 @@ bool checkMacAssistiveDevices()
 	if (!result) {
 		QMessageBox::information(
             nullptr, "InputLeafPlus",
-			"Please enable access to assistive devices "
-			"System Preferences -> Security & Privacy -> "
-            "Privacy -> Accessibility, then re-open InputLeafPlus.");
+			"시스템 설정 -> 개인정보 보호 및 보안 -> 손쉬운 사용에서 "
+            "InputLeafPlus 접근을 허용한 뒤 다시 실행해 주세요.");
 	}
 	return result;
 

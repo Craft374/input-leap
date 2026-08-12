@@ -78,6 +78,11 @@ if (INPUTLEAP_BUILD_GUI)
     find_package(Qt${QT_DEFAULT_MAJOR_VERSION} COMPONENTS Core REQUIRED)
     get_target_property(qmake_executable Qt${QT_DEFAULT_MAJOR_VERSION}::qmake IMPORTED_LOCATION)
     get_filename_component(_qt_bin_dir "${qmake_executable}" DIRECTORY)
+    execute_process(
+        COMMAND "${qmake_executable}" -query QT_INSTALL_TRANSLATIONS
+        OUTPUT_VARIABLE QT_TRANSLATIONS_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
     if(WIN32)
         set(deployqtapp windeployqt)
         find_program(QT_DEPLOY_TOOL ${deployqtapp} HINTS "${_qt_bin_dir}")

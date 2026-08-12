@@ -101,6 +101,11 @@ class AppConfig: public QObject
         void setMinimizeToTray(bool b);
         bool getMinimizeToTray();
 
+        bool getMacMapFunctionKeys() const;
+        void setMacMapFunctionKeys(bool enabled);
+        const QString& macLocalInputDevice() const;
+        void setMacLocalInputDevice(const QString& device);
+
         void saveSettings();
 
 protected:
@@ -137,6 +142,8 @@ protected:
         bool m_AutoHide;
         bool m_AutoStart;
         bool m_MinimizeToTray;
+        bool m_MacMapFunctionKeys;
+        QString m_MacLocalInputDevice;
 
         static const char server_name_[];
         static const char client_name_[];

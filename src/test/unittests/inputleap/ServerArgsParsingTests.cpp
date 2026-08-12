@@ -67,4 +67,20 @@ TEST(ServerArgsParsingTests, parseServerArgs_configArg_setConfigFile)
     EXPECT_EQ("mock_configFile", serverArgs.m_configFile);
 }
 
+TEST(ServerArgsParsingTests, parseServerArgs_macInputArgs_setMacInputOptions)
+{
+    NiceMock<MockArgParser> argParser;
+    ON_CALL(argParser, parseGenericArgs(_, _, _)).WillByDefault(Invoke(server_stubParseGenericArgs));
+    ON_CALL(argParser, checkUnexpectedArgs()).WillByDefault(Invoke(server_stubCheckUnexpectedArgs));
+    ServerArgs serverArgs;
+    const int argc = 4;
+    const char* command[argc] = {
+        "stub", "--mac-map-function-keys", "--mac-local-input-device", "4489:34880:34734080"
+    };
+
+    EXPECT_TRUE(argParser.parseServerArgs(serverArgs, argc, command));
+    EXPECT_TRUE(serverArgs.map_mac_function_keys);
+    EXPECT_EQ("4489:34880:34734080", serverArgs.mac_local_input_device);
+}
+
 } // namespace inputleap

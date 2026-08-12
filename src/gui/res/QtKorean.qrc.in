@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/translations">
+        <file alias="qtbase_ko.qm">@QT_KOREAN_TRANSLATION@</file>
+    </qresource>
+</RCC>

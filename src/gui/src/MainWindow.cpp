@@ -317,7 +317,7 @@ MainWindow::MainWindow(QSettings& settings, AppConfig& appConfig) :
     setAttribute(Qt::WA_X11NetWmWindowTypeDialog, true);
 
     ui_->setupUi(this);
-#if !defined(Q_OS_MAC)
+#if !defined(Q_OS_MAC) && !defined(Q_OS_WIN)
     ui_->m_pButtonQuit->hide();
 #endif
     setWindowIcon(QIcon(APP_LARGE_ICON));
@@ -1040,6 +1040,15 @@ bool MainWindow::serverArgs(QStringList& args, QString& app)
         args << "--disable-client-cert-checking";
     }
 
+#if defined(Q_OS_MAC)
+    if (appConfig().getMacMapFunctionKeys()) {
+        args << "--mac-map-function-keys";
+    }
+    if (!appConfig().macLocalInputDevice().isEmpty()) {
+        args << "--mac-local-input-device" << appConfig().macLocalInputDevice();
+    }
+#endif
+
     QString configFilename = this->configFilename();
 #if defined(Q_OS_WIN)
     // wrap in quotes in case username contains spaces.
@@ -1416,10 +1425,23 @@ void MainWindow::on_m_pActionAbout_triggered()
 
 void MainWindow::on_m_pActionSettings_triggered()
 {
+#if defined(Q_OS_MAC)
+    const bool oldMapMacFunctionKeys = appConfig().getMacMapFunctionKeys();
+    const QString oldMacLocalInputDevice = appConfig().macLocalInputDevice();
+#endif
     auto dialog = std::make_unique<SettingsDialog>(this, appConfig());
     connect(dialog.get(), &SettingsDialog::requestLanguageChange, this, &MainWindow::requestLanguageChange);
-    if (dialog.get()->exec() == QDialog::Accepted)
+    if (dialog.get()->exec() == QDialog::Accepted) {
         updateSSLFingerprint();
+#if defined(Q_OS_MAC)
+        const bool macInputChanged = oldMapMacFunctionKeys != appConfig().getMacMapFunctionKeys() ||
+            oldMacLocalInputDevice != appConfig().macLocalInputDevice();
+        if (macInputChanged && app_role() == AppRole::Server &&
+            m_ExpectedRunningState == kStarted) {
+            restart_cmd_app();
+        }
+#endif
+    }
     disconnect(dialog.get(), &SettingsDialog::requestLanguageChange, this, &MainWindow::requestLanguageChange);
 }
 

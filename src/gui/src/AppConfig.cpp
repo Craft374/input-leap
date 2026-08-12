@@ -61,7 +61,8 @@ AppConfig::AppConfig(QSettings* settings) :
     m_CryptoEnabled(false),
     m_AutoHide(false),
     m_AutoStart(false),
-    m_MinimizeToTray(false)
+    m_MinimizeToTray(false),
+    m_MacMapFunctionKeys(true)
 {
     Q_ASSERT(m_pSettings);
 
@@ -147,7 +148,7 @@ void AppConfig::loadSettings()
     m_LogToFile = settings().value("logToFile", false).toBool();
     m_LogFilename = settings().value("logFilename", log_dir() + "input-leap.log").toString();
     m_WizardLastRun = settings().value("wizardLastRun", 0).toInt();
-    m_Language = settings().value("language", QLocale::system().name()).toString();
+    m_Language = QStringLiteral("ko");
     m_StartedBefore = settings().value("startedBefore", false).toBool();
     m_AutoConfig = settings().value("autoConfig", true).toBool();
     QVariant elevateMode = settings().value("elevateModeEnum");
@@ -163,6 +164,8 @@ void AppConfig::loadSettings()
     m_AutoHide = settings().value("autoHide", false).toBool();
     m_AutoStart = settings().value("autoStart", false).toBool();
     m_MinimizeToTray = settings().value("minimizeToTray", false).toBool();
+    m_MacMapFunctionKeys = settings().value("macMapFunctionKeys", true).toBool();
+    m_MacLocalInputDevice = settings().value("macLocalInputDevice").toString();
 }
 
 void AppConfig::saveSettings()
@@ -187,6 +190,8 @@ void AppConfig::saveSettings()
     settings().setValue("autoHide", m_AutoHide);
     settings().setValue("autoStart", m_AutoStart);
     settings().setValue("minimizeToTray", m_MinimizeToTray);
+    settings().setValue("macMapFunctionKeys", m_MacMapFunctionKeys);
+    settings().setValue("macLocalInputDevice", m_MacLocalInputDevice);
     settings().sync();
 }
 
@@ -243,3 +248,11 @@ bool AppConfig::getAutoStart() { return m_AutoStart; }
 void AppConfig::setMinimizeToTray(bool b) { m_MinimizeToTray = b; }
 
 bool AppConfig::getMinimizeToTray() { return m_MinimizeToTray; }
+
+bool AppConfig::getMacMapFunctionKeys() const { return m_MacMapFunctionKeys; }
+
+void AppConfig::setMacMapFunctionKeys(bool enabled) { m_MacMapFunctionKeys = enabled; }
+
+const QString& AppConfig::macLocalInputDevice() const { return m_MacLocalInputDevice; }
+
+void AppConfig::setMacLocalInputDevice(const QString& device) { m_MacLocalInputDevice = device; }

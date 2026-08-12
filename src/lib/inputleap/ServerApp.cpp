@@ -136,6 +136,9 @@ ServerApp::help()
 #ifdef WINAPI_LIBEI
            << " [--use-ei]"
 #endif
+#if WINAPI_CARBON
+           << " [--mac-map-function-keys] [--mac-local-input-device <id>]"
+#endif
            << HELP_SYS_ARGS
            << HELP_COMMON_ARGS
            << "\n"
@@ -155,6 +158,12 @@ ServerApp::help()
 #endif
 #ifdef WINAPI_LIBEI
            << "      --use-ei             use the EI backend\n"
+#endif
+#if WINAPI_CARBON
+           << "      --mac-map-function-keys\n"
+           << "                           send the macOS top row as F1-F12\n"
+           << "      --mac-local-input-device <id>\n"
+           << "                           keep the selected USB keyboard local\n"
 #endif
            << HELP_SYS_INFO
            << HELP_COMMON_INFO_2
@@ -905,7 +914,8 @@ std::unique_ptr<IPlatformScreen> ServerApp::create_platform_screen()
     }
 #endif
 #if WINAPI_CARBON
-    return std::make_unique<OSXScreen>(m_events, true);
+    return std::make_unique<OSXScreen>(m_events, true, true, args().map_mac_function_keys,
+                                       args().mac_local_input_device);
 #endif
     throw std::runtime_error("Failed to create screen, this shouldn't happen");
 }

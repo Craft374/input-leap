@@ -137,6 +137,32 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="m_pGroupMacInput">
+     <property name="title">
+      <string>Mac 서버 입력</string>
+     </property>
+     <layout class="QFormLayout" name="macInputLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="m_pLabelLocalInputDevice">
+        <property name="text">
+         <string>Mac에서만 사용할 USB 키보드:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="m_pComboLocalInputDevice"/>
+      </item>
+      <item row="1" column="0" colspan="2">
+       <widget class="QCheckBox" name="m_pCheckBoxMacMapFunctionKeys">
+        <property name="text">
+         <string>상단 기능 키를 Windows에서 F1~F12로 사용</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="m_pGroupNetworking">
      <property name="title">
       <string>Networking</string>

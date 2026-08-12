@@ -143,7 +143,14 @@ ArgParser::parseServerArgs(ServerArgs& args, int argc, const char* const* argv)
             }
             else if (a.shift("--disable-client-cert-checking")) {
                 args.check_client_certificates = false;
-            } else {
+            }
+            else if (a.shift("--mac-map-function-keys")) {
+                args.map_mac_function_keys = true;
+            }
+            else if (a.shift("--mac-local-input-device", nullptr, &optarg)) {
+                args.mac_local_input_device = optarg;
+            }
+            else {
                 throw XArgvParserError("unrecognized option `%s'", a.peek());
             }
         }

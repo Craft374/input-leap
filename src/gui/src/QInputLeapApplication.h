@@ -39,6 +39,7 @@ class QInputLeapApplication : public QApplication
 
     private:
         std::unique_ptr<QTranslator> translator_;
+        std::unique_ptr<QTranslator> qt_translator_;
 
         static QInputLeapApplication* s_Instance;
 };
