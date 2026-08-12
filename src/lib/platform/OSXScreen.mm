@@ -83,20 +83,11 @@ long hidDeviceNumber(IOHIDDeviceRef device, CFStringRef key)
 	return result;
 }
 
-CFMutableDictionaryRef hidKeyboardMatchingDictionary()
+bool hidDeviceBoolean(IOHIDDeviceRef device, CFStringRef key)
 {
-	CFMutableDictionaryRef matching = CFDictionaryCreateMutable(
-		kCFAllocatorDefault, 2, &kCFTypeDictionaryKeyCallBacks,
-		&kCFTypeDictionaryValueCallBacks);
-	int usagePage = kHIDPage_GenericDesktop;
-	int usage = kHIDUsage_GD_Keyboard;
-	CFNumberRef usagePageValue = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usagePage);
-	CFNumberRef usageValue = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usage);
-	CFDictionarySetValue(matching, CFSTR(kIOHIDDeviceUsagePageKey), usagePageValue);
-	CFDictionarySetValue(matching, CFSTR(kIOHIDDeviceUsageKey), usageValue);
-	CFRelease(usagePageValue);
-	CFRelease(usageValue);
-	return matching;
+	CFTypeRef value = IOHIDDeviceGetProperty(device, key);
+	return value != nullptr && CFGetTypeID(value) == CFBooleanGetTypeID() &&
+		CFBooleanGetValue(static_cast<CFBooleanRef>(value));
 }
 
 std::uint64_t absoluteTimeToNanoseconds(std::uint64_t value)
@@ -109,12 +100,12 @@ std::uint64_t absoluteTimeToNanoseconds(std::uint64_t value)
 	return value * timebase.numer / timebase.denom;
 }
 
-int macFunctionKeyForHidUsage(std::uint32_t usagePage, std::uint32_t usage, long vendor)
+int macFunctionKeyForHidUsage(std::uint32_t usagePage, std::uint32_t usage, bool appleKeyboard)
 {
 	if (usagePage == kHIDPage_KeyboardOrKeypad && usage >= 0x3a && usage <= 0x45) {
 		return static_cast<int>(usage - 0x3a + 1);
 	}
-	if (vendor != 0x05ac) {
+	if (!appleKeyboard) {
 		return 0;
 	}
 
@@ -174,9 +165,7 @@ public:
 		if (manager_ == nullptr) {
 			return;
 		}
-		CFMutableDictionaryRef matching = hidKeyboardMatchingDictionary();
-		IOHIDManagerSetDeviceMatching(manager_, matching);
-		CFRelease(matching);
+		IOHIDManagerSetDeviceMatching(manager_, nullptr);
 		IOHIDManagerRegisterInputValueCallback(manager_, inputValueCallback, this);
 		IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
 		if (IOHIDManagerOpen(manager_, kIOHIDOptionsTypeNone) != kIOReturnSuccess) {
@@ -249,19 +238,24 @@ private:
 	{
 		IOHIDElementRef element = IOHIDValueGetElement(value);
 		const std::uint32_t usagePage = IOHIDElementGetUsagePage(element);
-		if (usagePage != kHIDPage_KeyboardOrKeypad && usagePage != kHIDPage_Consumer &&
-			usagePage != kHIDPage_GenericDesktop) {
-			return;
-		}
-
+		const std::uint32_t usage = IOHIDElementGetUsage(element);
 		IOHIDDeviceRef device = IOHIDElementGetDevice(element);
 		const long vendor = hidDeviceNumber(device, CFSTR(kIOHIDVendorIDKey));
+		const bool appleKeyboard = vendor == 0x05ac ||
+			hidDeviceBoolean(device, CFSTR(kIOHIDBuiltInKey));
 		const bool local = vendor == localVendor_ &&
 			hidDeviceNumber(device, CFSTR(kIOHIDProductIDKey)) == localProduct_ &&
 			hidDeviceNumber(device, CFSTR(kIOHIDLocationIDKey)) == localLocation_;
-		const std::uint32_t usage = IOHIDElementGetUsage(element);
+		const bool relevantUsage = usagePage == kHIDPage_KeyboardOrKeypad ||
+			usagePage == kHIDPage_Consumer ||
+			(usagePage == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_DoNotDisturb) ||
+			(local && usagePage >= 0xff00);
+		if (!relevantUsage) {
+			return;
+		}
+
 		const bool down = IOHIDValueGetIntegerValue(value) != 0;
-		const int functionKey = macFunctionKeyForHidUsage(usagePage, usage, vendor);
+		const int functionKey = macFunctionKeyForHidUsage(usagePage, usage, appleKeyboard);
 
 		if (functionKey != 0) {
 			heldFunctionKey_ = down ? functionKey : 0;
@@ -1564,17 +1558,26 @@ OSXScreen::onMediaKey(CGEventRef event)
 void
 OSXScreen::onFunctionKey(int number, bool down, bool isRepeat)
 {
-	static const KeyID functionKeys[] = {
-		kKeyF1, kKeyF2, kKeyF3, kKeyF4, kKeyF5, kKeyF6,
-		kKeyF7, kKeyF8, kKeyF9, kKeyF10, kKeyF11, kKeyF12
+	struct FunctionKey {
+		KeyID id;
+		std::uint32_t virtualKey;
+	};
+	static const FunctionKey functionKeys[] = {
+		{kKeyF1, kVK_F1}, {kKeyF2, kVK_F2}, {kKeyF3, kVK_F3},
+		{kKeyF4, kVK_F4}, {kKeyF5, kVK_F5}, {kKeyF6, kVK_F6},
+		{kKeyF7, kVK_F7}, {kKeyF8, kVK_F8}, {kKeyF9, kVK_F9},
+		{kKeyF10, kVK_F10}, {kKeyF11, kVK_F11}, {kKeyF12, kVK_F12}
 	};
 	if (number < 1 || number > static_cast<int>(sizeof(functionKeys) / sizeof(functionKeys[0]))) {
 		return;
 	}
 
 	const KeyModifierMask mask = m_keyState->getActiveModifiers();
+	const FunctionKey& functionKey = functionKeys[number - 1];
+	const KeyButton button = OSXKeyState::mapVirtualKeyToKeyButton(functionKey.virtualKey);
+	m_keyState->onKey(button, down, mask);
 	m_keyState->sendKeyEvent(get_event_target(), down, isRepeat,
-		functionKeys[number - 1], mask, 1, 0);
+		functionKey.id, mask, 1, button);
 }
 
 bool

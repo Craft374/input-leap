@@ -145,7 +145,7 @@
       <item row="0" column="0">
        <widget class="QLabel" name="m_pLabelLocalInputDevice">
         <property name="text">
-         <string>Mac에서만 사용할 USB 키보드:</string>
+         <string>Mac에서만 사용할 USB 입력 장치:</string>
         </property>
        </widget>
       </item>

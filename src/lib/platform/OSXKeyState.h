@@ -100,6 +100,10 @@ public:
     virtual void pollPressedKeys(KeyButtonSet& pressedKeys) const;
 
     CGEventFlags getModifierStateAsOSXFlags();
+
+    // Maps an OS X virtual key id to a non-zero KeyButton.
+    static KeyButton mapVirtualKeyToKeyButton(std::uint32_t keyCode);
+
 protected:
     // KeyState overrides
     virtual void getKeyMap(inputleap::KeyMap& keyMap);
@@ -137,10 +141,6 @@ private:
     // to clients because they'd try to match it as a command modifier.
     void adjustAltGrModifier(const KeyIDs& ids,
                             KeyModifierMask* mask, bool isCommand) const;
-
-    // Maps an OS X virtual key id to a KeyButton.  This simply remaps
-    // the ids so we don't use KeyButton 0.
-    static KeyButton mapVirtualKeyToKeyButton(std::uint32_t keyCode);
 
     // Maps a KeyButton to an OS X key code.  This is the inverse of
     // mapVirtualKeyToKeyButton.

@@ -72,7 +72,7 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
     }
     else if (!app_config_.macLocalInputDevice().isEmpty()) {
         ui_->m_pComboLocalInputDevice->addItem(
-            tr("저장된 키보드 (현재 연결되지 않음)"), app_config_.macLocalInputDevice());
+            tr("저장된 USB 입력 장치 (현재 연결되지 않음)"), app_config_.macLocalInputDevice());
         ui_->m_pComboLocalInputDevice->setCurrentIndex(ui_->m_pComboLocalInputDevice->count() - 1);
     }
     ui_->m_pCheckBoxMacMapFunctionKeys->setChecked(app_config_.getMacMapFunctionKeys());

@@ -46,22 +46,6 @@ QString deviceString(IOHIDDeviceRef device, CFStringRef key)
     return QString::fromUtf8(buffer.constData());
 }
 
-CFMutableDictionaryRef keyboardMatchingDictionary()
-{
-    CFMutableDictionaryRef matching = CFDictionaryCreateMutable(
-        kCFAllocatorDefault, 2, &kCFTypeDictionaryKeyCallBacks,
-        &kCFTypeDictionaryValueCallBacks);
-    int usagePage = kHIDPage_GenericDesktop;
-    int usage = kHIDUsage_GD_Keyboard;
-    CFNumberRef usagePageValue = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usagePage);
-    CFNumberRef usageValue = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usage);
-    CFDictionarySetValue(matching, CFSTR(kIOHIDDeviceUsagePageKey), usagePageValue);
-    CFDictionarySetValue(matching, CFSTR(kIOHIDDeviceUsageKey), usageValue);
-    CFRelease(usagePageValue);
-    CFRelease(usageValue);
-    return matching;
-}
-
 } // namespace
 
 QVector<MacInputDevice> macInputDevices()
@@ -72,9 +56,7 @@ QVector<MacInputDevice> macInputDevices()
         return result;
     }
 
-    CFMutableDictionaryRef matching = keyboardMatchingDictionary();
-    IOHIDManagerSetDeviceMatching(manager, matching);
-    CFRelease(matching);
+    IOHIDManagerSetDeviceMatching(manager, nullptr);
     if (IOHIDManagerOpen(manager, kIOHIDOptionsTypeNone) != kIOReturnSuccess) {
         CFRelease(manager);
         return result;
@@ -96,9 +78,12 @@ QVector<MacInputDevice> macInputDevices()
             const long vendor = deviceNumber(device, CFSTR(kIOHIDVendorIDKey));
             const long product = deviceNumber(device, CFSTR(kIOHIDProductIDKey));
             const long location = deviceNumber(device, CFSTR(kIOHIDLocationIDKey));
+            if (vendor == 0 && product == 0 && location == 0) {
+                continue;
+            }
             QString name = deviceString(device, CFSTR(kIOHIDProductKey)).trimmed();
             if (name.isEmpty()) {
-                name = QObject::tr("이름 없는 USB 키보드");
+                name = QObject::tr("이름 없는 USB 입력 장치");
             }
 
             MacInputDevice inputDevice;

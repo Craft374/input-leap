@@ -769,8 +769,8 @@ Bonjour를 설치하시겠습니까?</translation>
     </message>
     <message>
         <location filename="../../src/MacInputDevice.cpp" line="98"/>
-        <source>이름 없는 USB 키보드</source>
-        <translation>이름 없는 USB 키보드</translation>
+        <source>이름 없는 USB 입력 장치</source>
+        <translation>이름 없는 USB 입력 장치</translation>
     </message>
 </context>
 <context>
@@ -1194,8 +1194,8 @@ Double click on a screen to edit its settings.</source>
     </message>
     <message>
         <location filename="../../src/SettingsDialog.cpp" line="75"/>
-        <source>저장된 키보드 (현재 연결되지 않음)</source>
-        <translation>저장된 키보드 (현재 연결되지 않음)</translation>
+        <source>저장된 USB 입력 장치 (현재 연결되지 않음)</source>
+        <translation>저장된 USB 입력 장치 (현재 연결되지 않음)</translation>
     </message>
     <message>
         <location filename="../../src/SettingsDialog.cpp" line="167"/>
@@ -1264,8 +1264,8 @@ Double click on a screen to edit its settings.</source>
     </message>
     <message>
         <location filename="../../src/SettingsDialog.ui" line="148"/>
-        <source>Mac에서만 사용할 USB 키보드:</source>
-        <translation>Mac에서만 사용할 USB 키보드:</translation>
+        <source>Mac에서만 사용할 USB 입력 장치:</source>
+        <translation>Mac에서만 사용할 USB 입력 장치:</translation>
     </message>
     <message>
         <location filename="../../src/SettingsDialog.ui" line="158"/>
