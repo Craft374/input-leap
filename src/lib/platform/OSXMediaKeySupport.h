@@ -22,10 +22,16 @@
 
 #include "inputleap/key_types.h"
 
+#include <cstdint>
+
 namespace inputleap {
 
 bool fakeNativeMediaKey(KeyID id);
 bool isMediaKeyEvent(CGEventRef event);
+bool getSystemKeyEventInfo(CGEventRef event, std::uint32_t* keyType,
+                           bool* down, bool* isRepeat);
 bool getMediaKeyEventInfo(CGEventRef event, KeyID* keyId, bool* down, bool* isRepeat);
+int macFunctionKeyForKeyCode(std::uint32_t keyCode);
+int macFunctionKeyForSystemKey(std::uint32_t keyType);
 
 } // namespace inputleap

@@ -18,6 +18,41 @@
 
 namespace inputleap {
 
+int
+macFunctionKeyForKeyCode(std::uint32_t keyCode)
+{
+	switch (keyCode) {
+	case 0x91: return 1; // Brightness down
+	case 0x90: return 2; // Brightness up
+	case 0xa0: return 3; // Mission Control
+	case 0x81:            // Spotlight
+	case 0x83: return 4; // Launchpad on older keyboards
+	case 0xb0: return 5; // Dictation
+	case 0xb2: return 6; // Do Not Disturb
+	default: return 0;
+	}
+}
+
+int
+macFunctionKeyForSystemKey(std::uint32_t keyType)
+{
+	switch (keyType) {
+	case NX_KEYTYPE_BRIGHTNESS_DOWN: return 1;
+	case NX_KEYTYPE_BRIGHTNESS_UP: return 2;
+	case NX_KEYTYPE_ILLUMINATION_DOWN: return 5;
+	case NX_KEYTYPE_ILLUMINATION_UP: return 6;
+	case NX_KEYTYPE_REWIND:
+	case NX_KEYTYPE_PREVIOUS: return 7;
+	case NX_KEYTYPE_PLAY: return 8;
+	case NX_KEYTYPE_FAST:
+	case NX_KEYTYPE_NEXT: return 9;
+	case NX_KEYTYPE_MUTE: return 10;
+	case NX_KEYTYPE_SOUND_DOWN: return 11;
+	case NX_KEYTYPE_SOUND_UP: return 12;
+	default: return 0;
+	}
+}
+
 int convertKeyIDToNXKeyType(KeyID id)
 {
 	int type = -1;
@@ -95,38 +130,46 @@ convertNXKeyTypeToKeyID(uint32_t const type)
 
 bool
 isMediaKeyEvent(CGEventRef event) {
-	NSEvent* nsEvent = nil;
-	@try {
-		nsEvent = [NSEvent eventWithCGEvent: event];
-		if ([nsEvent subtype] != 8) {
-			return false;
-		}
-		uint32_t const nxKeyId = ([nsEvent data1] & 0xFFFF0000) >> 16;
-		if (convertNXKeyTypeToKeyID (nxKeyId)) {
-			return true;
-		}
-	} @catch (NSException* e) {
-	}
-	return false;
+	std::uint32_t keyType = 0;
+	return getSystemKeyEventInfo(event, &keyType, nullptr, nullptr) &&
+		convertNXKeyTypeToKeyID(keyType) != 0;
 }
 
 bool
-getMediaKeyEventInfo(CGEventRef event, KeyID* const keyId,
-					 bool* const down, bool* const isRepeat) {
+getSystemKeyEventInfo(CGEventRef event, std::uint32_t* const keyType,
+					  bool* const down, bool* const isRepeat) {
 	NSEvent* nsEvent = nil;
 	@try {
 		nsEvent = [NSEvent eventWithCGEvent: event];
 	} @catch (NSException* e) {
 		return false;
 	}
-	if (keyId) {
-		*keyId = convertNXKeyTypeToKeyID (([nsEvent data1] & 0xFFFF0000) >> 16);
+	if (nsEvent == nil || [nsEvent subtype] != 8) {
+		return false;
+	}
+
+	const std::uint32_t data = static_cast<std::uint32_t>([nsEvent data1]);
+	if (keyType) {
+		*keyType = (data & 0xffff0000u) >> 16;
 	}
 	if (down) {
-		*down = !([nsEvent data1] & 0x100);
+		*down = (data & 0x100u) == 0;
 	}
 	if (isRepeat) {
-		*isRepeat = [nsEvent data1] & 0x1;
+		*isRepeat = (data & 0x1u) != 0;
+	}
+	return true;
+}
+
+bool
+getMediaKeyEventInfo(CGEventRef event, KeyID* const keyId,
+					 bool* const down, bool* const isRepeat) {
+	std::uint32_t keyType = 0;
+	if (!getSystemKeyEventInfo(event, &keyType, down, isRepeat)) {
+		return false;
+	}
+	if (keyId) {
+		*keyId = convertNXKeyTypeToKeyID(keyType);
 	}
 	return true;
 }

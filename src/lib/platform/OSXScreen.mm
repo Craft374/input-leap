@@ -83,11 +83,11 @@ long hidDeviceNumber(IOHIDDeviceRef device, CFStringRef key)
 	return result;
 }
 
-bool hidDeviceBoolean(IOHIDDeviceRef device, CFStringRef key)
+void setHidMatchingNumber(CFMutableDictionaryRef matching, CFStringRef key, long value)
 {
-	CFTypeRef value = IOHIDDeviceGetProperty(device, key);
-	return value != nullptr && CFGetTypeID(value) == CFBooleanGetTypeID() &&
-		CFBooleanGetValue(static_cast<CFBooleanRef>(value));
+	CFNumberRef number = CFNumberCreate(kCFAllocatorDefault, kCFNumberLongType, &value);
+	CFDictionarySetValue(matching, key, number);
+	CFRelease(number);
 }
 
 std::uint64_t absoluteTimeToNanoseconds(std::uint64_t value)
@@ -100,43 +100,18 @@ std::uint64_t absoluteTimeToNanoseconds(std::uint64_t value)
 	return value * timebase.numer / timebase.denom;
 }
 
-int macFunctionKeyForHidUsage(std::uint32_t usagePage, std::uint32_t usage, bool appleKeyboard)
+CFMutableDictionaryRef hidDeviceMatchingDictionary(long vendor, long product, long location)
 {
-	if (usagePage == kHIDPage_KeyboardOrKeypad && usage >= 0x3a && usage <= 0x45) {
-		return static_cast<int>(usage - 0x3a + 1);
+	CFMutableDictionaryRef matching = CFDictionaryCreateMutable(
+		kCFAllocatorDefault, 3, &kCFTypeDictionaryKeyCallBacks,
+		&kCFTypeDictionaryValueCallBacks);
+	if (matching == nullptr) {
+		return nullptr;
 	}
-	if (!appleKeyboard) {
-		return 0;
-	}
-
-	if (usagePage == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_DoNotDisturb) {
-		return 6;
-	}
-	if (usagePage != kHIDPage_Consumer) {
-		return 0;
-	}
-
-	switch (usage) {
-	case kHIDUsage_Csmr_DisplayBrightnessDecrement: return 1;
-	case kHIDUsage_Csmr_DisplayBrightnessIncrement: return 2;
-	case kHIDUsage_Csmr_ACDesktopShowAllWindows: return 3;
-	case kHIDUsage_Csmr_ACDesktopShowAllApplications:
-	case kHIDUsage_Csmr_ACSearch: return 4;
-	case kHIDUsage_Csmr_KeyboardBrightnessDecrement:
-	case kHIDUsage_Csmr_VoiceCommand: return 5;
-	case kHIDUsage_Csmr_KeyboardBrightnessIncrement: return 6;
-	case kHIDUsage_Csmr_Rewind:
-	case kHIDUsage_Csmr_ScanPreviousTrack: return 7;
-	case kHIDUsage_Csmr_Play:
-	case kHIDUsage_Csmr_Pause:
-	case kHIDUsage_Csmr_PlayOrPause: return 8;
-	case kHIDUsage_Csmr_FastForward:
-	case kHIDUsage_Csmr_ScanNextTrack: return 9;
-	case kHIDUsage_Csmr_Mute: return 10;
-	case kHIDUsage_Csmr_VolumeDecrement: return 11;
-	case kHIDUsage_Csmr_VolumeIncrement: return 12;
-	default: return 0;
-	}
+	setHidMatchingNumber(matching, CFSTR(kIOHIDVendorIDKey), vendor);
+	setHidMatchingNumber(matching, CFSTR(kIOHIDProductIDKey), product);
+	setHidMatchingNumber(matching, CFSTR(kIOHIDLocationIDKey), location);
+	return matching;
 }
 
 } // namespace
@@ -144,32 +119,39 @@ int macFunctionKeyForHidUsage(std::uint32_t usagePage, std::uint32_t usage, bool
 struct OSXHidEventMatch
 {
 	bool local = false;
-	int functionKey = 0;
-	bool down = false;
 };
 
 class OSXInputDeviceMonitor
 {
 public:
 	explicit OSXInputDeviceMonitor(const std::string& localDevice) :
-		manager_(IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone))
+		manager_(nullptr)
 	{
 		char separator1 = 0;
 		char separator2 = 0;
 		std::istringstream id(localDevice);
 		if (!(id >> localVendor_ >> separator1 >> localProduct_ >> separator2 >> localLocation_) ||
 			separator1 != ':' || separator2 != ':') {
-			localVendor_ = localProduct_ = localLocation_ = -1;
+			return;
 		}
 
+		manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
 		if (manager_ == nullptr) {
 			return;
 		}
-		IOHIDManagerSetDeviceMatching(manager_, nullptr);
+		CFMutableDictionaryRef matching = hidDeviceMatchingDictionary(
+			localVendor_, localProduct_, localLocation_);
+		if (matching == nullptr) {
+			return;
+		}
+		IOHIDManagerSetDeviceMatching(manager_, matching);
+		CFRelease(matching);
 		IOHIDManagerRegisterInputValueCallback(manager_, inputValueCallback, this);
 		IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-		if (IOHIDManagerOpen(manager_, kIOHIDOptionsTypeNone) != kIOReturnSuccess) {
-			LOG_WARN("failed to monitor macOS keyboard devices");
+		const IOReturn openResult = IOHIDManagerOpen(manager_, kIOHIDOptionsTypeNone);
+		if (openResult != kIOReturnSuccess) {
+			LOG_WARN("failed to monitor selected macOS input device (0x%08x)",
+				static_cast<unsigned int>(openResult));
 		}
 	}
 
@@ -192,27 +174,15 @@ public:
 		}
 
 		std::uint64_t closestDifference = std::numeric_limits<std::uint64_t>::max();
-		int bestPriority = -1;
 		for (const auto& input : events_) {
 			const std::uint64_t difference = input.timestamp > timestamp
 				? input.timestamp - timestamp : timestamp - input.timestamp;
-			const int priority = (input.local ? 2 : 0) + (input.functionKey != 0 ? 1 : 0);
-			if (difference <= kHidEventMatchToleranceNs &&
-				(difference < closestDifference ||
-				 (difference == closestDifference && priority > bestPriority))) {
+			if (difference <= kHidEventMatchToleranceNs && difference < closestDifference) {
 				closestDifference = difference;
-				bestPriority = priority;
 				result.local = input.local;
-				result.functionKey = input.functionKey;
-				result.down = input.down;
 			}
 		}
 		return result;
-	}
-
-	int heldFunctionKey() const
-	{
-		return heldFunctionKey_;
 	}
 
 	bool hasHeldLocalSystemInput() const
@@ -225,8 +195,6 @@ private:
 	{
 		std::uint64_t timestamp;
 		bool local;
-		int functionKey;
-		bool down;
 	};
 
 	static void inputValueCallback(void* context, IOReturn, void*, IOHIDValueRef value)
@@ -241,8 +209,6 @@ private:
 		const std::uint32_t usage = IOHIDElementGetUsage(element);
 		IOHIDDeviceRef device = IOHIDElementGetDevice(element);
 		const long vendor = hidDeviceNumber(device, CFSTR(kIOHIDVendorIDKey));
-		const bool appleKeyboard = vendor == 0x05ac ||
-			hidDeviceBoolean(device, CFSTR(kIOHIDBuiltInKey));
 		const bool local = vendor == localVendor_ &&
 			hidDeviceNumber(device, CFSTR(kIOHIDProductIDKey)) == localProduct_ &&
 			hidDeviceNumber(device, CFSTR(kIOHIDLocationIDKey)) == localLocation_;
@@ -255,12 +221,7 @@ private:
 		}
 
 		const bool down = IOHIDValueGetIntegerValue(value) != 0;
-		const int functionKey = macFunctionKeyForHidUsage(usagePage, usage, appleKeyboard);
-
-		if (functionKey != 0) {
-			heldFunctionKey_ = down ? functionKey : 0;
-		}
-		if (local && (usagePage == kHIDPage_Consumer || functionKey != 0)) {
+		if (local && usagePage != kHIDPage_KeyboardOrKeypad) {
 			const std::uint64_t input = (static_cast<std::uint64_t>(usagePage) << 32) | usage;
 			if (down) {
 				heldLocalSystemInputs_.insert(input);
@@ -270,7 +231,7 @@ private:
 			}
 		}
 		events_.push_back({absoluteTimeToNanoseconds(IOHIDValueGetTimeStamp(value)),
-			local, functionKey, down});
+			local});
 		if (events_.size() > 128) {
 			events_.pop_front();
 		}
@@ -281,7 +242,6 @@ private:
 	long localProduct_ = -1;
 	long localLocation_ = -1;
 	std::deque<InputEvent> events_;
-	int heldFunctionKey_ = 0;
 	std::set<std::uint64_t> heldLocalSystemInputs_;
 };
 
@@ -332,7 +292,7 @@ OSXScreen::OSXScreen(IEventQueue* events, bool isPrimary, bool autoShowHideCurso
 		updateScreenShape(m_displayID, 0);
         m_screensaver = new OSXScreenSaver(m_events, get_event_target());
 		m_keyState	  = new OSXKeyState(m_events);
-		if (m_isPrimary && (m_mapMacFunctionKeys || !localInputDevice.empty())) {
+		if (m_isPrimary && !localInputDevice.empty()) {
 			m_inputDeviceMonitor = new OSXInputDeviceMonitor(localInputDevice);
 		}
 
@@ -2148,10 +2108,17 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 			}
 			return event;
 		}
-		if (!screen->m_isOnScreen && screen->m_mapMacFunctionKeys && hidEvent.functionKey != 0) {
+	}
+
+	if (!screen->m_isOnScreen && screen->m_mapMacFunctionKeys &&
+		(type == kCGEventKeyDown || type == kCGEventKeyUp)) {
+		const auto keyCode = static_cast<std::uint32_t>(
+			CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
+		const int functionKey = macFunctionKeyForKeyCode(keyCode);
+		if (functionKey != 0) {
 			const bool isRepeat = type == kCGEventKeyDown &&
 				CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) == 1;
-			screen->onFunctionKey(hidEvent.functionKey, hidEvent.down, isRepeat);
+			screen->onFunctionKey(functionKey, type == kCGEventKeyDown, isRepeat);
 			return nullptr;
 		}
 	}
@@ -2203,15 +2170,16 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 			break;
 		default:
 			if (type == NX_SYSDEFINED) {
-			if (!screen->m_isOnScreen && screen->m_mapMacFunctionKeys &&
-				screen->m_inputDeviceMonitor != nullptr &&
-				screen->m_inputDeviceMonitor->heldFunctionKey() != 0) {
+			if (!screen->m_isOnScreen && screen->m_mapMacFunctionKeys) {
+				std::uint32_t keyType = 0;
 				bool down = false;
 				bool isRepeat = false;
-				if (getMediaKeyEventInfo(event, nullptr, &down, &isRepeat)) {
-					screen->onFunctionKey(
-						screen->m_inputDeviceMonitor->heldFunctionKey(), down, isRepeat);
-					break;
+				if (getSystemKeyEventInfo(event, &keyType, &down, &isRepeat)) {
+					const int functionKey = macFunctionKeyForSystemKey(keyType);
+					if (functionKey != 0) {
+						screen->onFunctionKey(functionKey, down, isRepeat);
+						break;
+					}
 				}
 			}
 			if (isMediaKeyEvent (event)) {
