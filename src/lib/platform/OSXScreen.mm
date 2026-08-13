@@ -203,11 +203,6 @@ public:
 		return result;
 	}
 
-	bool hasHeldLocalSystemInput() const
-	{
-		return !heldLocalSystemInputs_.empty();
-	}
-
 private:
 	struct InputEvent
 	{
@@ -238,16 +233,6 @@ private:
 			return;
 		}
 
-		const bool down = IOHIDValueGetIntegerValue(value) != 0;
-		if (local && usagePage != kHIDPage_KeyboardOrKeypad) {
-			const std::uint64_t input = (static_cast<std::uint64_t>(usagePage) << 32) | usage;
-			if (down) {
-				heldLocalSystemInputs_.insert(input);
-			}
-			else {
-				heldLocalSystemInputs_.erase(input);
-			}
-		}
 		events_.push_back({absoluteTimeToNanoseconds(IOHIDValueGetTimeStamp(value)),
 			local});
 		if (events_.size() > 128) {
@@ -258,7 +243,6 @@ private:
 	IOHIDManagerRef manager_;
 	std::set<std::tuple<long, long, long>> devices_;
 	std::deque<InputEvent> events_;
-	std::set<std::uint64_t> heldLocalSystemInputs_;
 };
 
 //
@@ -2098,30 +2082,39 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 	const bool keyEvent = type == kCGEventKeyDown || type == kCGEventKeyUp ||
 		type == kCGEventFlagsChanged || type == NX_SYSDEFINED;
 	if (keyEvent && screen->m_inputDeviceMonitor != nullptr) {
-		if (type == NX_SYSDEFINED && screen->m_inputDeviceMonitor->hasHeldLocalSystemInput()) {
-			return event;
-		}
 		if (type == kCGEventKeyDown) {
 			const auto keyCode = static_cast<std::uint32_t>(
 				CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
-			if (screen->m_localKeyCodes.count(keyCode) != 0) {
+			// autorepeat keeps sending keyDown for a key already held; reuse
+			// its original verdict instead of re-matching (a held key stops
+			// producing HID reports, so a fresh match would wrongly miss).
+			auto it = screen->m_localKeyCodes.find(keyCode);
+			const bool local = it != screen->m_localKeyCodes.end() ? it->second :
+				screen->m_inputDeviceMonitor->match(event).local;
+			screen->m_localKeyCodes[keyCode] = local;
+			if (local) {
 				return event;
 			}
 		}
 		else if (type == kCGEventKeyUp) {
 			const auto keyCode = static_cast<std::uint32_t>(
 				CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
-			if (screen->m_localKeyCodes.erase(keyCode) != 0) {
+			auto it = screen->m_localKeyCodes.find(keyCode);
+			bool local;
+			if (it != screen->m_localKeyCodes.end()) {
+				// use the matching keyDown's verdict so a down forwarded to
+				// the remote screen always gets its up forwarded too.
+				local = it->second;
+				screen->m_localKeyCodes.erase(it);
+			}
+			else {
+				local = screen->m_inputDeviceMonitor->match(event).local;
+			}
+			if (local) {
 				return event;
 			}
 		}
-
-		const OSXHidEventMatch hidEvent = screen->m_inputDeviceMonitor->match(event);
-		if (hidEvent.local) {
-			if (type == kCGEventKeyDown) {
-				screen->m_localKeyCodes.insert(static_cast<std::uint32_t>(
-					CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)));
-			}
+		else if (screen->m_inputDeviceMonitor->match(event).local) {
 			return event;
 		}
 	}

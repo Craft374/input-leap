@@ -289,7 +289,7 @@ private:
     OSXKeyState* m_keyState;
     OSXInputDeviceMonitor* m_inputDeviceMonitor;
     bool m_mapMacFunctionKeys;
-    std::set<std::uint32_t> m_localKeyCodes;
+    std::map<std::uint32_t, bool> m_localKeyCodes;
 
     // clipboards
     OSXClipboard m_pasteboard;
