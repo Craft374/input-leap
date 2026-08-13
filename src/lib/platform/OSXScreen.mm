@@ -183,7 +183,12 @@ public:
 		}
 	}
 
-	OSXHidEventMatch match(CGEventRef event)
+	// keyboardPage: true for keyDown/keyUp/flagsChanged CGEvents (correlate
+	// against keyboard-page HID reports only); false for NX_SYSDEFINED media
+	// events (correlate against Consumer-page/DND reports only). Either way,
+	// a vendor-specific (macro) report from the excluded device always
+	// matches, since it isn't on a standard page to classify by.
+	OSXHidEventMatch match(CGEventRef event, bool keyboardPage)
 	{
 		OSXHidEventMatch result;
 		const std::uint64_t timestamp = CGEventGetTimestamp(event);
@@ -193,6 +198,17 @@ public:
 
 		std::uint64_t closestDifference = std::numeric_limits<std::uint64_t>::max();
 		for (const auto& input : events_) {
+			// A keyboard-page CGEvent (letter/F-key/modifier presses) may
+			// only match a keyboard-page (or vendor-specific macro) HID
+			// report, never a Consumer-page one, and vice versa. Without
+			// this, an unrelated Consumer-page report from the excluded
+			// device (e.g. a gaming keyboard's periodic status chatter)
+			// could coincidentally land within the timing window and get
+			// misattributed to an ordinary keypress from a different,
+			// non-excluded keyboard, silently swallowing it.
+			if (!input.vendorSpecific && input.keyboardPage != keyboardPage) {
+				continue;
+			}
 			const std::uint64_t difference = input.timestamp > timestamp
 				? input.timestamp - timestamp : timestamp - input.timestamp;
 			if (difference <= kHidEventMatchToleranceNs && difference < closestDifference) {
@@ -208,6 +224,8 @@ private:
 	{
 		std::uint64_t timestamp;
 		bool local;
+		bool keyboardPage;
+		bool vendorSpecific;
 	};
 
 	static void inputValueCallback(void* context, IOReturn, void*, IOHIDValueRef value)
@@ -225,16 +243,17 @@ private:
 		const long product = hidDeviceNumber(device, CFSTR(kIOHIDProductIDKey));
 		const long location = hidDeviceNumber(device, CFSTR(kIOHIDLocationIDKey));
 		const bool local = devices_.count({vendor, product, location}) != 0;
+		const bool vendorSpecific = local && usagePage >= 0xff00;
 		const bool relevantUsage = usagePage == kHIDPage_KeyboardOrKeypad ||
 			usagePage == kHIDPage_Consumer ||
 			(usagePage == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_DoNotDisturb) ||
-			(local && usagePage >= 0xff00);
+			vendorSpecific;
 		if (!relevantUsage) {
 			return;
 		}
 
 		events_.push_back({absoluteTimeToNanoseconds(IOHIDValueGetTimeStamp(value)),
-			local});
+			local, usagePage == kHIDPage_KeyboardOrKeypad, vendorSpecific});
 		if (events_.size() > 128) {
 			events_.pop_front();
 		}
@@ -2090,7 +2109,7 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 			// producing HID reports, so a fresh match would wrongly miss).
 			auto it = screen->m_localKeyCodes.find(keyCode);
 			const bool local = it != screen->m_localKeyCodes.end() ? it->second :
-				screen->m_inputDeviceMonitor->match(event).local;
+				screen->m_inputDeviceMonitor->match(event, true).local;
 			screen->m_localKeyCodes[keyCode] = local;
 			if (local) {
 				return event;
@@ -2108,13 +2127,13 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 				screen->m_localKeyCodes.erase(it);
 			}
 			else {
-				local = screen->m_inputDeviceMonitor->match(event).local;
+				local = screen->m_inputDeviceMonitor->match(event, true).local;
 			}
 			if (local) {
 				return event;
 			}
 		}
-		else if (screen->m_inputDeviceMonitor->match(event).local) {
+		else if (screen->m_inputDeviceMonitor->match(event, type == kCGEventFlagsChanged).local) {
 			return event;
 		}
 	}
