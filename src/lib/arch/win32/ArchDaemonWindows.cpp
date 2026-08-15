@@ -115,7 +115,7 @@ ArchDaemonWindows::installDaemon(const char* name,
     SC_HANDLE service = CreateService(mgr,
                                       name,
                                       name,
-                                      0,
+                                      WRITE_DAC, // needed to set the DACL below
                                       SERVICE_WIN32_OWN_PROCESS | SERVICE_INTERACTIVE_PROCESS,
                                       SERVICE_AUTO_START,
                                       SERVICE_ERROR_NORMAL,
