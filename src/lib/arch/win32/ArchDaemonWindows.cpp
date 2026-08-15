@@ -22,10 +22,34 @@
 #include "arch/Arch.h"
 #include "arch/XArch.h"
 #include "base/Time.h"
+#include <sddl.h>
 #include <sstream>
 #include <vector>
 
 namespace inputleap {
+
+namespace {
+
+// same rights the installer grants: SYSTEM and administrators keep full
+// control, interactive users (IU) may also start and stop the service so the
+// GUI and the build script don't have to elevate for that.
+const char SERVICE_SDDL[] = "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)"
+                            "(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)"
+                            "(A;;CCLCSWRPWPLOCRRC;;;IU)"
+                            "(A;;CCLCSWLOCRRC;;;SU)";
+
+// not fatal if it fails: the service just needs elevation to be controlled
+void allowInteractiveUsersToControlService(SC_HANDLE service)
+{
+    PSECURITY_DESCRIPTOR descriptor = nullptr;
+    if (ConvertStringSecurityDescriptorToSecurityDescriptorA(
+            SERVICE_SDDL, SDDL_REVISION_1, &descriptor, nullptr)) {
+        SetServiceObjectSecurity(service, DACL_SECURITY_INFORMATION, descriptor);
+        LocalFree(descriptor);
+    }
+}
+
+} // namespace
 
 ArchDaemonWindows*        ArchDaemonWindows::s_daemon = nullptr;
 
@@ -112,7 +136,7 @@ ArchDaemonWindows::installDaemon(const char* name,
 
         // the service is already installed, possibly pointing at another
         // (older) copy of the daemon.  point it at this one.
-        service = OpenService(mgr, name, SERVICE_CHANGE_CONFIG);
+        service = OpenService(mgr, name, SERVICE_CHANGE_CONFIG | WRITE_DAC);
         if (service == nullptr ||
             !ChangeServiceConfig(service, SERVICE_NO_CHANGE, SERVICE_AUTO_START,
                                  SERVICE_NO_CHANGE, pathname, nullptr, nullptr,
@@ -124,12 +148,10 @@ ArchDaemonWindows::installDaemon(const char* name,
             CloseServiceHandle(mgr);
             throw XArchDaemonInstallFailed(error_code_to_string_windows(err));
         }
-        CloseServiceHandle(service);
     }
-    else {
-        // done with service (but only try to close if not null)
-        CloseServiceHandle(service);
-    }
+
+    allowInteractiveUsersToControlService(service);
+    CloseServiceHandle(service);
 
     // done with manager
     CloseServiceHandle(mgr);
