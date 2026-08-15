@@ -56,8 +56,6 @@ class LogDialog;
 class QInputLeapApplication;
 class SetupWizard;
 class ZeroconfService;
-class DataDownloader;
-class CommandProcess;
 class SslCertificate;
 
 namespace Ui
@@ -127,7 +125,6 @@ public slots:
         void stop_cmd_app();
         void logOutput();
         void logError();
-        void bonjourInstallFinished();
         void showLogWindow();
         void quitApplication();
 
@@ -157,7 +154,7 @@ public slots:
         bool isServiceRunning();
 #endif
         bool isBonjourRunning();
-        void downloadBonjour();
+        void offerBonjourDownload();
         void promptAutoConfig();
         void checkConnected(const QString& line);
         void checkFingerprint(const QString& line);
@@ -182,12 +179,8 @@ public slots:
         QMenu* main_menu_;
         QMenu* m_pMenuHelp;
         ZeroconfService* m_pZeroconfService;
-        DataDownloader* m_pDataDownloader;
-        QMessageBox* m_DownloadMessageBox;
-        QAbstractButton* m_pCancelButton;
         QMutex m_UpdateZeroconfMutex;
         bool m_SuppressAutoConfigWarning;
-        CommandProcess* m_BonjourInstall;
         bool m_SuppressEmptyServerWarning;
         qRuningState m_ExpectedRunningState;
         QMutex m_StopDesktopMutex;
@@ -202,6 +195,5 @@ private slots:
     void on_m_pCheckBoxAutoConfig_toggled(bool checked);
     void comboServerList_currentIndexChanged(QString );
     void on_m_pButtonReload_clicked();
-    void installBonjour();
 
 };

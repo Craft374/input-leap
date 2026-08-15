@@ -517,27 +517,13 @@ To automatically trust this fingerprint for future connections, click Yes. To re
         <translation>취소</translation>
     </message>
     <message>
-        <location filename="../../src/MainWindow.cpp" line="1610"/>
-        <source>Failed to download Bonjour installer to location: %1</source>
-        <translation>Bonjour 설치 파일을 다음 위치에 다운로드하지 못했습니다: %1</translation>
-    </message>
-    <message>
-        <location filename="../../src/MainWindow.cpp" line="1646"/>
-        <source>Do you want to enable auto config and install Bonjour?
+        <location filename="../../src/MainWindow.cpp" line="1560"/>
+        <source>Auto config requires Apple Bonjour, which is not running on this computer.
 
-This feature helps you establish the connection.</source>
-        <translation>자동 설정을 켜고 Bonjour를 설치하시겠습니까?
+Open the Bonjour download page? You can also just type the server address by hand.</source>
+        <translation>자동 설정에는 Apple Bonjour가 필요하지만 이 컴퓨터에서 실행되고 있지 않습니다.
 
-이 기능은 컴퓨터 연결을 도와줍니다.</translation>
-    </message>
-    <message>
-        <location filename="../../src/MainWindow.cpp" line="1676"/>
-        <source>Auto config feature requires Bonjour.
-
-Do you want to install Bonjour?</source>
-        <translation>자동 설정 기능에는 Bonjour가 필요합니다.
-
-Bonjour를 설치하시겠습니까?</translation>
+Bonjour 다운로드 페이지를 여시겠습니까? 서버 주소를 직접 입력해도 됩니다.</translation>
     </message>
     <message>
         <location filename="../../src/MainWindow.cpp" line="1242"/>

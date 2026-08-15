@@ -35,7 +35,6 @@ set(GUI_SOURCE_FILES
     src/AppLocale.cpp
     src/BaseConfig.cpp
     src/CommandProcess.cpp
-    src/DataDownloader.cpp
     src/FingerprintAcceptDialog.cpp
     src/HotkeyDialog.cpp
     src/IpcClient.cpp
@@ -75,7 +74,6 @@ set(GUI_HEADER_FILES
     src/AppLocale.h
     src/BaseConfig.h
     src/CommandProcess.h
-    src/DataDownloader.h
     src/ElevateMode.h
     src/HotkeyDialog.h
     src/IpcClient.h

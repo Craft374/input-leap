@@ -25,11 +25,8 @@
 #include "ServerConfigDialog.h"
 #include "SettingsDialog.h"
 #include "ZeroconfService.h"
-#include "DataDownloader.h"
-#include "CommandProcess.h"
 #include "FingerprintAcceptDialog.h"
 #include "QUtility.h"
-#include "ProcessorArch.h"
 #include "SslCertificate.h"
 #include "base/String.h"
 #include "common/DataDirectories.h"
@@ -63,10 +60,7 @@ static const QString allFilesFilter(QObject::tr("All files (*.*)"));
 #if defined(Q_OS_WIN)
 static const char APP_CONFIG_NAME[] = "input-leap.sgc";
 static const QString APP_CONFIG_FILTER(QObject::tr("InputLeafPlus Configurations (*.sgc)"));
-static QString bonjourBaseUrl = "http://binaries.symless.com/bonjour/";
-static const char bonjourFilename32[] = "Bonjour.msi";
-static const char bonjourFilename64[] = "Bonjour64.msi";
-static const char bonjourTargetFilename[] = "Bonjour.msi";
+static const char bonjourDownloadUrl[] = "https://support.apple.com/kb/DL999";
 #else
 static const char APP_CONFIG_NAME[] = "input-leap.conf";
 static const QString APP_CONFIG_FILTER(QObject::tr("InputLeafPlus Configurations (*.conf)"));
@@ -188,18 +182,8 @@ bool stopWindowsServiceDirectly(DWORD& error)
     return stopped != FALSE || error == ERROR_SERVICE_NOT_ACTIVE;
 }
 
-bool runElevatedServiceCommand(const wchar_t* command)
+bool runElevated(const QString& executable, const QString& parameters)
 {
-    wchar_t systemDirectory[MAX_PATH]{};
-    if (GetSystemDirectoryW(systemDirectory, MAX_PATH) == 0) {
-        return false;
-    }
-
-    const QString executable = QDir::toNativeSeparators(
-        QString::fromWCharArray(systemDirectory) + QStringLiteral("/sc.exe"));
-    const QString parameters = QStringLiteral("%1 InputLeap")
-                                   .arg(QString::fromWCharArray(command));
-
     SHELLEXECUTEINFOW executeInfo{};
     executeInfo.cbSize = sizeof(executeInfo);
     executeInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -222,8 +206,82 @@ bool runElevatedServiceCommand(const wchar_t* command)
     return waitResult == WAIT_OBJECT_0 && exitCode == 0;
 }
 
+bool runElevatedServiceCommand(const wchar_t* command)
+{
+    wchar_t systemDirectory[MAX_PATH]{};
+    if (GetSystemDirectoryW(systemDirectory, MAX_PATH) == 0) {
+        return false;
+    }
+
+    return runElevated(
+        QDir::toNativeSeparators(QString::fromWCharArray(systemDirectory) +
+                                 QStringLiteral("/sc.exe")),
+        QStringLiteral("%1 InputLeap").arg(QString::fromWCharArray(command)));
+}
+
+// the daemon that ships next to this executable
+QString daemonPath()
+{
+    return QDir::toNativeSeparators(QCoreApplication::applicationDirPath() +
+                                    QStringLiteral("/input-leapd.exe"));
+}
+
+// false if the service is missing or still points at another copy of the daemon
+// (e.g. a previous installation), which would run stale code.
+bool windowsServiceUsesOurDaemon()
+{
+    SC_HANDLE manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (manager == nullptr) {
+        return false;
+    }
+
+    SC_HANDLE service = OpenServiceW(manager, WINDOWS_SERVICE_NAME, SERVICE_QUERY_CONFIG);
+    if (service == nullptr) {
+        CloseServiceHandle(manager);
+        return false;
+    }
+
+    DWORD bytesNeeded = 0;
+    QueryServiceConfigW(service, nullptr, 0, &bytesNeeded);
+    QByteArray buffer(static_cast<int>(bytesNeeded), 0);
+    auto* config = reinterpret_cast<QUERY_SERVICE_CONFIGW*>(buffer.data());
+
+    bool matches = false;
+    if (bytesNeeded != 0 &&
+        QueryServiceConfigW(service, config, bytesNeeded, &bytesNeeded)) {
+        // the stored path may be quoted and followed by arguments
+        matches = QString::fromWCharArray(config->lpBinaryPathName)
+                      .contains(daemonPath(), Qt::CaseInsensitive);
+    }
+
+    CloseServiceHandle(service);
+    CloseServiceHandle(manager);
+    return matches;
+}
+
+// registering a service needs administrator rights, so the daemon does it for
+// us in a separate elevated process. it also starts the service afterwards.
+bool installWindowsService()
+{
+    DWORD state = SERVICE_STOPPED;
+    DWORD error = ERROR_SUCCESS;
+    if (queryWindowsServiceState(state, error) && state != SERVICE_STOPPED) {
+        if (!stopWindowsServiceDirectly(error) && error == ERROR_ACCESS_DENIED) {
+            runElevatedServiceCommand(L"stop");
+        }
+        waitForWindowsServiceState(SERVICE_STOPPED, 30000);
+    }
+
+    return runElevated(daemonPath(), QStringLiteral("/install")) &&
+           waitForWindowsServiceState(SERVICE_RUNNING, 30000);
+}
+
 bool ensureWindowsServiceRunning()
 {
+    if (!windowsServiceUsesOurDaemon()) {
+        return installWindowsService();
+    }
+
     DWORD state = SERVICE_STOPPED;
     DWORD error = ERROR_SUCCESS;
     if (!queryWindowsServiceState(state, error)) {
@@ -299,11 +357,7 @@ MainWindow::MainWindow(QSettings& settings, AppConfig& appConfig) :
     main_menu_(nullptr),
     m_pMenuHelp(nullptr),
     m_pZeroconfService(nullptr),
-    m_pDataDownloader(nullptr),
-    m_DownloadMessageBox(nullptr),
-    m_pCancelButton(nullptr),
     m_SuppressAutoConfigWarning(false),
-    m_BonjourInstall(nullptr),
     m_SuppressEmptyServerWarning(false),
     m_ExpectedRunningState(kStopped),
     m_pSslCertificate(nullptr),
@@ -388,8 +442,6 @@ MainWindow::~MainWindow()
     saveSettings();
 
     delete m_pZeroconfService;
-    delete m_DownloadMessageBox;
-    delete m_BonjourInstall;
     delete m_pSslCertificate;
 
     // LogWindow is created as a sibling of the MainWindow rather than a child
@@ -1493,34 +1545,28 @@ void MainWindow::on_m_pButtonReload_clicked()
 #if defined(Q_OS_WIN)
 bool MainWindow::isServiceRunning(QString name)
 {
-    SC_HANDLE hSCManager;
-    hSCManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
+    SC_HANDLE hSCManager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
     if (hSCManager == nullptr) {
-        appendLogError("failed to open a service controller manager, error: " +
-            GetLastError());
+        appendLogError(QStringLiteral("failed to open a service controller manager, error: %1")
+                           .arg(GetLastError()));
         return false;
     }
 
-    auto array = name.toLocal8Bit();
-
-#if QT_VERSION_MAJOR < 6
-    SC_HANDLE hService = OpenService(hSCManager, array.data(), SERVICE_QUERY_STATUS);
-#else
-    SC_HANDLE hService = OpenService(hSCManager, reinterpret_cast<LPCWSTR>(array.data()), SERVICE_QUERY_STATUS);
-#endif
+    SC_HANDLE hService = OpenServiceW(
+        hSCManager, reinterpret_cast<LPCWSTR>(name.utf16()), SERVICE_QUERY_STATUS);
     if (hService == nullptr) {
         appendLogDebug("failed to open service: " + name);
+        CloseServiceHandle(hSCManager);
         return false;
     }
 
     SERVICE_STATUS status;
-    if (QueryServiceStatus(hService, &status)) {
-        if (status.dwCurrentState == SERVICE_RUNNING) {
-            return true;
-        }
-    }
+    const bool running = QueryServiceStatus(hService, &status) &&
+                         status.dwCurrentState == SERVICE_RUNNING;
 
-    return false;
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCManager);
+    return running;
 }
 #else
 bool MainWindow::isServiceRunning()
@@ -1542,119 +1588,28 @@ bool MainWindow::isBonjourRunning()
     return result;
 }
 
-void MainWindow::downloadBonjour()
+void MainWindow::offerBonjourDownload()
 {
 #if defined(Q_OS_WIN)
-    QUrl url;
-    int arch = getProcessorArch();
-    if (arch == kProcessorArchWin32) {
-        url.setUrl(bonjourBaseUrl + bonjourFilename32);
-        appendLogInfo("downloading 32-bit Bonjour");
+    int r = QMessageBox::question(
+        this, tr("InputLeafPlus"),
+        tr("Auto config requires Apple Bonjour, which is not running on this "
+           "computer.\n\nOpen the Bonjour download page? You can also just type "
+           "the server address by hand."),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (r == QMessageBox::Yes) {
+        QDesktopServices::openUrl(QUrl(bonjourDownloadUrl));
     }
-    else if (arch == kProcessorArchWin64) {
-        url.setUrl(bonjourBaseUrl + bonjourFilename64);
-        appendLogInfo("downloading 64-bit Bonjour");
-    }
-    else {
-        QMessageBox::critical(
-            this, tr("InputLeafPlus"),
-            tr("Failed to detect system architecture."));
-        return;
-    }
-
-    if (m_pDataDownloader == nullptr) {
-        m_pDataDownloader = new DataDownloader(this);
-        connect(m_pDataDownloader, &DataDownloader::isComplete, this, &MainWindow::installBonjour);
-    }
-
-    m_pDataDownloader->download(url);
-
-    if (m_DownloadMessageBox == nullptr) {
-        m_DownloadMessageBox = new QMessageBox(this);
-        m_DownloadMessageBox->setWindowTitle("InputLeafPlus");
-        m_DownloadMessageBox->setIcon(QMessageBox::Information);
-        m_DownloadMessageBox->setText("Installing Bonjour, please wait...");
-#if QT_VERSION_MAJOR < 6
-        m_DownloadMessageBox->setStandardButtons(0);
-#else
-        m_DownloadMessageBox->setStandardButtons(QMessageBox::NoButton);
-#endif
-        m_pCancelButton = m_DownloadMessageBox->addButton(
-            tr("Cancel"), QMessageBox::RejectRole);
-    }
-    m_DownloadMessageBox->exec();
-
-    if (m_DownloadMessageBox->clickedButton() == m_pCancelButton) {
-        m_pDataDownloader->cancel();
-    }
-#endif
-}
-
-void MainWindow::installBonjour()
-{
-#if defined(Q_OS_WIN)
-#if QT_VERSION >= 0x050000
-    QString tempLocation = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-#else
-    QString tempLocation = QDesktopServices::storageLocation(
-                                QDesktopServices::TempLocation);
-#endif
-    QString filename = tempLocation;
-    filename.append("\\").append(bonjourTargetFilename);
-    QFile file(filename);
-    if (!file.open(QIODevice::WriteOnly)) {
-        m_DownloadMessageBox->hide();
-
-        QMessageBox::warning(
-            this, "InputLeafPlus",
-            tr("Failed to download Bonjour installer to location: %1")
-            .arg(tempLocation));
-        return;
-    }
-
-    file.write(m_pDataDownloader->data());
-    file.close();
-
-    QStringList arguments;
-    arguments.append("/i");
-    QString winFilename = QDir::toNativeSeparators(filename);
-    arguments.append(winFilename);
-    arguments.append("/passive");
-    if (m_BonjourInstall == nullptr) {
-        m_BonjourInstall = new CommandProcess("msiexec", arguments);
-    }
-
-    QThread* thread = new QThread;
-    connect(m_BonjourInstall, &CommandProcess::finished, this, &MainWindow::bonjourInstallFinished);
-    connect(m_BonjourInstall, &CommandProcess::finished, thread, &QThread::quit);
-    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-
-    m_BonjourInstall->moveToThread(thread);
-    thread->start();
-
-    QMetaObject::invokeMethod(m_BonjourInstall, "run", Qt::QueuedConnection);
-
-    m_DownloadMessageBox->hide();
 #endif
 }
 
 void MainWindow::promptAutoConfig()
 {
     if (!isBonjourRunning()) {
-        int r = QMessageBox::question(
-            this, tr("InputLeafPlus"),
-            tr("Do you want to enable auto config and install Bonjour?\n\n"
-               "This feature helps you establish the connection."),
-            QMessageBox::Yes | QMessageBox::No);
-
-        if (r == QMessageBox::Yes) {
-            m_AppConfig->setAutoConfig(true);
-            downloadBonjour();
-        }
-        else {
-            m_AppConfig->setAutoConfig(false);
-            ui_->m_pCheckBoxAutoConfig->setChecked(false);
-        }
+        m_AppConfig->setAutoConfig(false);
+        ui_->m_pCheckBoxAutoConfig->setChecked(false);
+        offerBonjourDownload();
     }
 
     m_AppConfig->setAutoConfigPrompted(true);
@@ -1671,15 +1626,7 @@ void MainWindow::on_m_pCheckBoxAutoConfig_toggled(bool checked)
 {
     if (!isBonjourRunning() && checked) {
         if (!m_SuppressAutoConfigWarning) {
-            int r = QMessageBox::information(
-                this, tr("InputLeafPlus"),
-                tr("Auto config feature requires Bonjour.\n\n"
-                   "Do you want to install Bonjour?"),
-                QMessageBox::Yes | QMessageBox::No);
-
-            if (r == QMessageBox::Yes) {
-                downloadBonjour();
-            }
+            offerBonjourDownload();
         }
 
         ui_->m_pCheckBoxAutoConfig->setChecked(false);
@@ -1694,13 +1641,6 @@ void MainWindow::on_m_pCheckBoxAutoConfig_toggled(bool checked)
         ui_->m_pComboServerList->clear();
         ui_->m_pComboServerList->hide();
     }
-}
-
-void MainWindow::bonjourInstallFinished()
-{
-    appendLogInfo("Bonjour install finished");
-
-    ui_->m_pCheckBoxAutoConfig->setChecked(true);
 }
 
 void MainWindow::windowStateChanged()

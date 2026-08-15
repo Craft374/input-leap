@@ -109,6 +109,22 @@ ArchDaemonWindows::installDaemon(const char* name,
             CloseServiceHandle(mgr);
             throw XArchDaemonInstallFailed(error_code_to_string_windows(err));
         }
+
+        // the service is already installed, possibly pointing at another
+        // (older) copy of the daemon.  point it at this one.
+        service = OpenService(mgr, name, SERVICE_CHANGE_CONFIG);
+        if (service == nullptr ||
+            !ChangeServiceConfig(service, SERVICE_NO_CHANGE, SERVICE_AUTO_START,
+                                 SERVICE_NO_CHANGE, pathname, nullptr, nullptr,
+                                 dependencies, nullptr, nullptr, nullptr)) {
+            err = GetLastError();
+            if (service != nullptr) {
+                CloseServiceHandle(service);
+            }
+            CloseServiceHandle(mgr);
+            throw XArchDaemonInstallFailed(error_code_to_string_windows(err));
+        }
+        CloseServiceHandle(service);
     }
     else {
         // done with service (but only try to close if not null)
@@ -618,8 +634,14 @@ ArchDaemonWindows::start(const char* name)
     }
 
     // start the service
-    if (!StartService(service, 0, nullptr)) {
-        throw XArchDaemonFailed(error_code_to_string_windows(GetLastError()));
+    const bool started = StartService(service, 0, nullptr) != 0;
+    const DWORD err = GetLastError();
+
+    CloseServiceHandle(service);
+    CloseServiceHandle(mgr);
+
+    if (!started && err != ERROR_SERVICE_ALREADY_RUNNING) {
+        throw XArchDaemonFailed(error_code_to_string_windows(err));
     }
 }
 
@@ -655,19 +677,18 @@ ArchDaemonWindows::stop(const char* name)
 void
 ArchDaemonWindows::installDaemon()
 {
-    // install default daemon if not already installed.
-    if (!isDaemonInstalled(DEFAULT_DAEMON_NAME)) {
-        char path[MAX_PATH];
-        GetModuleFileName(ArchMiscWindows::instanceWin32(), path, MAX_PATH);
+    char path[MAX_PATH];
+    GetModuleFileName(ArchMiscWindows::instanceWin32(), path, MAX_PATH);
 
-        // wrap in quotes so a malicious user can't start \Program.exe as admin.
-        std::stringstream ss;
-        ss << '"';
-        ss << path;
-        ss << '"';
+    // wrap in quotes so a malicious user can't start \Program.exe as admin.
+    std::stringstream ss;
+    ss << '"';
+    ss << path;
+    ss << '"';
 
-        installDaemon(DEFAULT_DAEMON_NAME, DEFAULT_DAEMON_INFO, ss.str().c_str(), "", "");
-    }
+    // always install: if the service already exists it may point at another
+    // copy of the daemon, so it is repointed at this one.
+    installDaemon(DEFAULT_DAEMON_NAME, DEFAULT_DAEMON_INFO, ss.str().c_str(), "", "");
 
     start(DEFAULT_DAEMON_NAME);
 }
