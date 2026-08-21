@@ -105,7 +105,10 @@ ArchDaemonWindows::installDaemon(const char* name,
                 const char* dependencies)
 {
     // open service manager
-    SC_HANDLE mgr = OpenSCManager(nullptr, nullptr, GENERIC_WRITE);
+    // GENERIC_WRITE alone does not include SC_MANAGER_CONNECT, which
+    // OpenService below needs when the service already exists.
+    SC_HANDLE mgr = OpenSCManager(nullptr, nullptr,
+                                  SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
     if (mgr == nullptr) {
         // can't open service manager
         throw XArchDaemonInstallFailed(error_code_to_string_windows(GetLastError()));
