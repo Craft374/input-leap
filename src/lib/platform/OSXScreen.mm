@@ -170,7 +170,9 @@ public:
 		if (openResult != kIOReturnSuccess) {
 			LOG_WARN("failed to monitor selected macOS input devices (0x%08x)",
 				static_cast<unsigned int>(openResult));
+			return;
 		}
+		LOG_INFO("keeping input from %zu local-only device(s) on this mac", devices_.size());
 	}
 
 	~OSXInputDeviceMonitor()
@@ -216,6 +218,8 @@ public:
 				result.local = input.local;
 			}
 		}
+		LOG_DEBUG1("hid match: buffered=%zu keyboardPage=%d -> local=%d",
+			events_.size(), keyboardPage ? 1 : 0, result.local ? 1 : 0);
 		return result;
 	}
 
@@ -252,6 +256,8 @@ private:
 			return;
 		}
 
+		LOG_DEBUG1("hid report: page=0x%x usage=0x%x local=%d",
+			usagePage, usage, local ? 1 : 0);
 		events_.push_back({absoluteTimeToNanoseconds(IOHIDValueGetTimeStamp(value)),
 			local, usagePage == kHIDPage_KeyboardOrKeypad, vendorSpecific});
 		if (events_.size() > 128) {
