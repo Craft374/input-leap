@@ -168,11 +168,15 @@ public:
 		IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
 		const IOReturn openResult = IOHIDManagerOpen(manager_, kIOHIDOptionsTypeNone);
 		if (openResult != kIOReturnSuccess) {
-			LOG_WARN("failed to monitor selected macOS input devices (0x%08x)",
+			// some devices can refuse to open (e.g. exclusive access) while the
+			// rest still report, so keep going instead of giving up entirely.
+			LOG_WARN("failed to monitor some selected macOS input devices (0x%08x)",
 				static_cast<unsigned int>(openResult));
-			return;
 		}
-		LOG_INFO("keeping input from %zu local-only device(s) on this mac", devices_.size());
+		for (const auto& device : devices_) {
+			LOG_INFO("keeping input local to this mac: %04lx:%04lx location %ld",
+				std::get<0>(device), std::get<1>(device), std::get<2>(device));
+		}
 	}
 
 	~OSXInputDeviceMonitor()
@@ -256,11 +260,16 @@ private:
 			return;
 		}
 
-		LOG_DEBUG1("hid report: page=0x%x usage=0x%x local=%d",
+		LOG_DEBUG2("hid report: page=0x%x usage=0x%x local=%d",
 			usagePage, usage, local ? 1 : 0);
-		events_.push_back({absoluteTimeToNanoseconds(IOHIDValueGetTimeStamp(value)),
-			local, usagePage == kHIDPage_KeyboardOrKeypad, vendorSpecific});
-		if (events_.size() > 128) {
+		const std::uint64_t now = absoluteTimeToNanoseconds(IOHIDValueGetTimeStamp(value));
+		events_.push_back({now, local, usagePage == kHIDPage_KeyboardOrKeypad,
+			vendorSpecific});
+		// Drop by age, not by count. A device that streams (a volume knob emits
+		// thousands of Consumer AC Pan reports a second) would otherwise push a
+		// real keypress out of a fixed-size buffer before match() ever sees it,
+		// and every key from that device would then look non-local.
+		while (events_.size() > 1 && events_.front().timestamp + kHidEventMatchToleranceNs < now) {
 			events_.pop_front();
 		}
 	}
