@@ -123,6 +123,21 @@ struct OSXHidEventMatch
 	bool local = false;
 };
 
+// CGEventGetTimestamp() is documented as nanoseconds since boot, but on some
+// machines it hands back raw mach ticks instead (Apple silicon's timebase is
+// 125/3, not 1:1), which then never lines up with the HID sample timestamps
+// below. Pick whichever reading is actually close to now.
+std::uint64_t cgEventTimestampNanoseconds(CGEventRef event)
+{
+	const std::uint64_t value = CGEventGetTimestamp(event);
+	const std::uint64_t ticks = mach_absolute_time();
+	const auto distance = [](std::uint64_t a, std::uint64_t b) {
+		return a > b ? a - b : b - a;
+	};
+	return distance(value, ticks) < distance(value, absoluteTimeToNanoseconds(ticks))
+		? absoluteTimeToNanoseconds(value) : value;
+}
+
 class OSXInputDeviceMonitor
 {
 public:
@@ -197,12 +212,13 @@ public:
 	OSXHidEventMatch match(CGEventRef event, bool keyboardPage)
 	{
 		OSXHidEventMatch result;
-		const std::uint64_t timestamp = CGEventGetTimestamp(event);
+		const std::uint64_t timestamp = cgEventTimestampNanoseconds(event);
 		while (!events_.empty() && events_.front().timestamp + kHidEventMatchToleranceNs < timestamp) {
 			events_.pop_front();
 		}
 
 		std::uint64_t closestDifference = std::numeric_limits<std::uint64_t>::max();
+		bool closestLocal = false;
 		for (const auto& input : events_) {
 			// A keyboard-page CGEvent (letter/F-key/modifier presses) may
 			// only match a keyboard-page (or vendor-specific macro) HID
@@ -217,13 +233,16 @@ public:
 			}
 			const std::uint64_t difference = input.timestamp > timestamp
 				? input.timestamp - timestamp : timestamp - input.timestamp;
-			if (difference <= kHidEventMatchToleranceNs && difference < closestDifference) {
+			if (difference < closestDifference) {
 				closestDifference = difference;
-				result.local = input.local;
+				closestLocal = input.local;
 			}
 		}
-		LOG_DEBUG1("hid match: buffered=%zu keyboardPage=%d -> local=%d",
-			events_.size(), keyboardPage ? 1 : 0, result.local ? 1 : 0);
+		result.local = closestLocal && closestDifference <= kHidEventMatchToleranceNs;
+		LOG_DEBUG1("hid match: buffered=%zu keyboardPage=%d closest=%lluus -> local=%d",
+			events_.size(), keyboardPage ? 1 : 0,
+			closestDifference == std::numeric_limits<std::uint64_t>::max()
+				? 0ull : closestDifference / 1000, result.local ? 1 : 0);
 		return result;
 	}
 
