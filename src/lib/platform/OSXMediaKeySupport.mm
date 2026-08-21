@@ -18,41 +18,6 @@
 
 namespace inputleap {
 
-int
-macFunctionKeyForKeyCode(std::uint32_t keyCode)
-{
-	switch (keyCode) {
-	case 0x91: return 1; // Brightness down
-	case 0x90: return 2; // Brightness up
-	case 0xa0: return 3; // Mission Control
-	case 0x81:            // Spotlight
-	case 0x83: return 4; // Launchpad on older keyboards
-	case 0xb0: return 5; // Dictation
-	case 0xb2: return 6; // Do Not Disturb
-	default: return 0;
-	}
-}
-
-int
-macFunctionKeyForSystemKey(std::uint32_t keyType)
-{
-	switch (keyType) {
-	case NX_KEYTYPE_BRIGHTNESS_DOWN: return 1;
-	case NX_KEYTYPE_BRIGHTNESS_UP: return 2;
-	case NX_KEYTYPE_ILLUMINATION_DOWN: return 5;
-	case NX_KEYTYPE_ILLUMINATION_UP: return 6;
-	case NX_KEYTYPE_REWIND:
-	case NX_KEYTYPE_PREVIOUS: return 7;
-	case NX_KEYTYPE_PLAY: return 8;
-	case NX_KEYTYPE_FAST:
-	case NX_KEYTYPE_NEXT: return 9;
-	case NX_KEYTYPE_MUTE: return 10;
-	case NX_KEYTYPE_SOUND_DOWN: return 11;
-	case NX_KEYTYPE_SOUND_UP: return 12;
-	default: return 0;
-	}
-}
-
 int convertKeyIDToNXKeyType(KeyID id)
 {
 	int type = -1;

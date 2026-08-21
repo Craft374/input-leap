@@ -41,6 +41,8 @@
 #include <mach-o/dyld.h>
 #include <AvailabilityMacros.h>
 #include <IOKit/hidsystem/event_status_driver.h>
+#include <IOKit/hidsystem/IOHIDLib.h>
+#include <IOKit/hidsystem/IOHIDParameter.h>
 #include <IOKit/hid/IOHIDKeys.h>
 #include <IOKit/hid/IOHIDManager.h>
 #include <AppKit/NSEvent.h>
@@ -264,6 +266,63 @@ private:
 	std::deque<InputEvent> events_;
 };
 
+// macOS의 "F1, F2 등의 키를 표준 기능 키로 사용" 모드(HIDFKeyMode)를 토글한다.
+// 이 모드가 켜지면 상단 키가 밝기/미션컨트롤 같은 특수 코드가 아니라 순수한
+// F1~F12 키코드를 보내므로, WindowServer가 F3~F6을 시스템 단축키로 먼저
+// 가로채는 문제(어떤 이벤트 탭으로도 관측 불가) 자체가 발생하지 않는다.
+// 원격 화면을 제어하는 동안에만 켜고, 돌아오면 원래 값으로 되돌린다.
+class OSXFunctionKeyMode
+{
+public:
+	OSXFunctionKeyMode()
+	{
+		io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
+			IOServiceMatching(kIOHIDSystemClass));
+		if (service == MACH_PORT_NULL) {
+			return;
+		}
+		if (IOServiceOpen(service, mach_task_self(), kIOHIDParamConnectType,
+				&connection_) != KERN_SUCCESS) {
+			connection_ = MACH_PORT_NULL;
+		}
+		IOObjectRelease(service);
+	}
+
+	// ponytail: SIGKILL로 죽으면 복구가 안 되지만, 이 값은 재로그인하면
+	// 사용자 환경설정 값으로 돌아가므로 별도 크래시 훅은 두지 않음.
+	~OSXFunctionKeyMode()
+	{
+		setStandard(false);
+		if (connection_ != MACH_PORT_NULL) {
+			IOServiceClose(connection_);
+		}
+	}
+
+	void setStandard(bool standard)
+	{
+		if (connection_ == MACH_PORT_NULL || standard == active_) {
+			return;
+		}
+		IOByteCount size = sizeof(saved_);
+		if (standard && IOHIDGetParameter(connection_, CFSTR(kIOHIDFKeyModeKey),
+				sizeof(saved_), &saved_, &size) != KERN_SUCCESS) {
+			return;
+		}
+		const std::uint32_t value = standard ? 1 : saved_;
+		if (IOHIDSetParameter(connection_, CFSTR(kIOHIDFKeyModeKey), &value,
+				sizeof(value)) != KERN_SUCCESS) {
+			LOG_WARN("failed to switch the mac function key mode");
+			return;
+		}
+		active_ = standard;
+	}
+
+private:
+	io_connect_t connection_ = MACH_PORT_NULL;
+	std::uint32_t saved_ = 0;
+	bool active_ = false;
+};
+
 //
 // OSXScreen
 //
@@ -282,7 +341,6 @@ OSXScreen::OSXScreen(IEventQueue* events, bool isPrimary, bool autoShowHideCurso
     m_dragTimer(nullptr),
     m_keyState(nullptr),
 	m_inputDeviceMonitor(nullptr),
-	m_mapMacFunctionKeys(mapMacFunctionKeys),
 	m_sequenceNumber(0),
     m_screensaver(nullptr),
 	m_screensaverNotify(false),
@@ -313,6 +371,9 @@ OSXScreen::OSXScreen(IEventQueue* events, bool isPrimary, bool autoShowHideCurso
 		m_keyState	  = new OSXKeyState(m_events);
 		if (m_isPrimary && !localInputDevice.empty()) {
 			m_inputDeviceMonitor = new OSXInputDeviceMonitor(localInputDevice);
+		}
+		if (m_isPrimary && mapMacFunctionKeys) {
+			m_functionKeyMode = std::make_unique<OSXFunctionKeyMode>();
 		}
 
 		// only needed when running as a server.
@@ -996,6 +1057,10 @@ OSXScreen::disable()
         m_clipboardTimer = nullptr;
 	}
 
+	if (m_functionKeyMode) {
+		m_functionKeyMode->setStandard(false);
+	}
+
 	m_isOnScreen = m_isPrimary;
 }
 
@@ -1005,6 +1070,10 @@ OSXScreen::enter()
     // Mark as on screen so other events are handled as on screen.
     // Mitigates https://github.com/input-leap/input-leap/issues/1043 from the bogus movement check
 	m_isOnScreen = true;
+
+	if (m_functionKeyMode) {
+		m_functionKeyMode->setStandard(false);
+	}
 
 	showCursor();
 
@@ -1043,6 +1112,11 @@ OSXScreen::canLeave()
 void
 OSXScreen::leave()
 {
+	// 원격 화면을 제어하는 동안에는 상단 키가 F1~F12를 그대로 보내게 한다.
+	if (m_functionKeyMode) {
+		m_functionKeyMode->setStandard(true);
+	}
+
     hideCursor();
 
 	if (isDraggingStarted()) {
@@ -1532,31 +1606,6 @@ OSXScreen::onMediaKey(CGEventRef event)
 	KeyButton button = 0;
 	KeyModifierMask mask = m_keyState->getActiveModifiers();
     m_keyState->sendKeyEvent(get_event_target(), down, isRepeat, keyID, mask, 1, button);
-}
-
-void
-OSXScreen::onFunctionKey(int number, bool down, bool isRepeat)
-{
-	struct FunctionKey {
-		KeyID id;
-		std::uint32_t virtualKey;
-	};
-	static const FunctionKey functionKeys[] = {
-		{kKeyF1, kVK_F1}, {kKeyF2, kVK_F2}, {kKeyF3, kVK_F3},
-		{kKeyF4, kVK_F4}, {kKeyF5, kVK_F5}, {kKeyF6, kVK_F6},
-		{kKeyF7, kVK_F7}, {kKeyF8, kVK_F8}, {kKeyF9, kVK_F9},
-		{kKeyF10, kVK_F10}, {kKeyF11, kVK_F11}, {kKeyF12, kVK_F12}
-	};
-	if (number < 1 || number > static_cast<int>(sizeof(functionKeys) / sizeof(functionKeys[0]))) {
-		return;
-	}
-
-	const KeyModifierMask mask = m_keyState->getActiveModifiers();
-	const FunctionKey& functionKey = functionKeys[number - 1];
-	const KeyButton button = OSXKeyState::mapVirtualKeyToKeyButton(functionKey.virtualKey);
-	m_keyState->onKey(button, down, mask);
-	m_keyState->sendKeyEvent(get_event_target(), down, isRepeat,
-		functionKey.id, mask, 1, button);
 }
 
 bool
@@ -2138,19 +2187,6 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 		}
 	}
 
-	if (!screen->m_isOnScreen && screen->m_mapMacFunctionKeys &&
-		(type == kCGEventKeyDown || type == kCGEventKeyUp)) {
-		const auto keyCode = static_cast<std::uint32_t>(
-			CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
-		const int functionKey = macFunctionKeyForKeyCode(keyCode);
-		if (functionKey != 0) {
-			const bool isRepeat = type == kCGEventKeyDown &&
-				CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) == 1;
-			screen->onFunctionKey(functionKey, type == kCGEventKeyDown, isRepeat);
-			return nullptr;
-		}
-	}
-
 	switch(type) {
 		case kCGEventLeftMouseDown:
 		case kCGEventRightMouseDown:
@@ -2198,18 +2234,6 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 			break;
 		default:
 			if (type == NX_SYSDEFINED) {
-			if (!screen->m_isOnScreen && screen->m_mapMacFunctionKeys) {
-				std::uint32_t keyType = 0;
-				bool down = false;
-				bool isRepeat = false;
-				if (getSystemKeyEventInfo(event, &keyType, &down, &isRepeat)) {
-					const int functionKey = macFunctionKeyForSystemKey(keyType);
-					if (functionKey != 0) {
-						screen->onFunctionKey(functionKey, down, isRepeat);
-						break;
-					}
-				}
-			}
 			if (isMediaKeyEvent (event)) {
 				LOG_DEBUG2("detected media key event");
 				screen->onMediaKey (event);

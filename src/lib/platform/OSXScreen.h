@@ -34,6 +34,7 @@
 #include <condition_variable>
 #include <bitset>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <vector>
@@ -50,6 +51,7 @@ class Thread;
 class OSXKeyState;
 class OSXScreenSaver;
 class OSXInputDeviceMonitor;
+class OSXFunctionKeyMode;
 
 //! Implementation of IPlatformScreen for OS X
 class OSXScreen : public PlatformScreen {
@@ -133,7 +135,6 @@ private:
     bool onKey(CGEventRef event);
 
     void onMediaKey(CGEventRef event);
-    void onFunctionKey(int number, bool down, bool isRepeat);
 
     bool onHotKey(EventRef event) const;
 
@@ -288,7 +289,7 @@ private:
     // keyboard stuff
     OSXKeyState* m_keyState;
     OSXInputDeviceMonitor* m_inputDeviceMonitor;
-    bool m_mapMacFunctionKeys;
+    std::unique_ptr<OSXFunctionKeyMode> m_functionKeyMode;
     std::map<std::uint32_t, bool> m_localKeyCodes;
 
     // clipboards
