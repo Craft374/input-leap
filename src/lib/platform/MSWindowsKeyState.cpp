@@ -615,6 +615,10 @@ MSWindowsKeyState::init()
 	// look up symbol that's available on winNT family but not win95
 	HMODULE userModule = GetModuleHandle("user32.dll");
 	m_ToUnicodeEx = (ToUnicodeEx_t)GetProcAddress(userModule, "ToUnicodeEx");
+
+	// the server's CapsLock key toggles ours (see isIgnoredKey()); its
+	// CapsLock state must not make every key flash ours.
+	setOwnCapsLock(true);
 }
 
 void
@@ -780,6 +784,14 @@ bool MSWindowsKeyState::fakeKeyRepeat(KeyID id, KeyModifierMask mask, std::int32
                                       KeyButton button)
 {
 	return KeyState::fakeKeyRepeat(id, mask, count, button);
+}
+
+bool
+MSWindowsKeyState::isIgnoredKey(KeyID key, KeyModifierMask mask) const
+{
+	// we keep our own CapsLock (see KeyMap::mapCharacterKey) so the
+	// server's CapsLock key is the only way to toggle it remotely.
+	return key != kKeyCapsLock && KeyState::isIgnoredKey(key, mask);
 }
 
 bool

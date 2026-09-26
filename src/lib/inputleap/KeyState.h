@@ -81,6 +81,9 @@ public:
 protected:
     typedef inputleap::KeyMap::Keystroke Keystroke;
 
+    //! Keep the local CapsLock state, see \c KeyMap::setOwnCapsLock()
+    void setOwnCapsLock(bool own) { m_keyMap.setOwnCapsLock(own); }
+
     //! @name protected manipulators
     //@{
 

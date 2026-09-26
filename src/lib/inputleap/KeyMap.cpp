@@ -595,6 +595,11 @@ const KeyMap::KeyItem* KeyMap::mapCharacterKey(Keystrokes& keys, KeyID id, std::
     }
     const KeyGroupTable& keyGroupTable = i->second;
 
+    // keep our own CapsLock.  matching the server's by toggling it around
+    // every key flashes the CapsLock indicator and never sticks.
+    const KeyModifierMask ownCapsLock = m_ownCapsLock ? KeyModifierCapsLock : 0;
+    desiredMask = (desiredMask & ~ownCapsLock) | (currentState & ownCapsLock);
+
     // find best key in any group, starting with the active group
     std::int32_t keyIndex  = -1;
     std::int32_t numGroups = getNumGroups();
@@ -632,7 +637,7 @@ const KeyMap::KeyItem* KeyMap::mapCharacterKey(Keystrokes& keys, KeyID id, std::
     for (size_t j = 0; j < itemList.size(); ++j) {
         if (!keysForKeyItem(itemList[j], newGroup, newModifiers,
                             newState, desiredMask,
-                            0, isAutoRepeat, keys)) {
+                            ownCapsLock, isAutoRepeat, keys)) {
             LOG_DEBUG1("can't map key");
             keys.clear();
             return nullptr;

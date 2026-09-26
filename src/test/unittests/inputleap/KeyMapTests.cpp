@@ -22,6 +22,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <algorithm>
+
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Invoke;
@@ -213,6 +215,89 @@ TEST(KeyMapTests, isCommand_superMask_returnTrue)
     KeyModifierMask mask= KeyModifierSuper;
 
     EXPECT_EQ(true, keyMap.isCommand(mask));
+}
+
+// CapsLock on button 1, the 'a' key on button 3 laid out like the Windows
+// client's keymap, space on button 4.
+static const KeyButton kCapsButton = 1;
+
+static KeyMap::KeyItem addTestKey(KeyMap& keyMap, KeyID id, KeyButton button,
+                                  KeyModifierMask required, KeyModifierMask sensitive)
+{
+    KeyMap::KeyItem item{};
+    item.m_id = id;
+    item.m_button = button;
+    item.m_required = required;
+    item.m_sensitive = sensitive;
+    KeyMap::initModifierKey(item);
+    keyMap.addKeyEntry(item);
+    return item;
+}
+
+static bool pressesCapsLock(const KeyMap::Keystrokes& keys)
+{
+    return std::any_of(keys.begin(), keys.end(), [](const KeyMap::Keystroke& key) {
+        return key.m_type == KeyMap::Keystroke::kButton &&
+               key.m_data.m_button.m_button == kCapsButton;
+    });
+}
+
+static KeyMap::KeyItem buildCapsTestMap(KeyMap& keyMap)
+{
+    const KeyModifierMask letter = KeyModifierShift | KeyModifierCapsLock;
+    const KeyMap::KeyItem caps = addTestKey(keyMap, kKeyCapsLock, kCapsButton, 0, 0);
+    addTestKey(keyMap, kKeyShift_L, 2, 0, 0);
+    addTestKey(keyMap, 'a', 3, 0, letter);
+    addTestKey(keyMap, 'A', 3, KeyModifierShift, letter);
+    addTestKey(keyMap, 'A', 3, KeyModifierCapsLock, letter);
+    addTestKey(keyMap, 'a', 3, letter, letter);
+    addTestKey(keyMap, ' ', 4, 0, 0);
+    keyMap.finish();
+    return caps;
+}
+
+TEST(KeyMapTests, mapKey_ownCapsLock_clientKeepsItsOwnCapsLock)
+{
+    KeyMap keyMap;
+    const KeyMap::KeyItem caps = buildCapsTestMap(keyMap);
+    keyMap.setOwnCapsLock(true);
+
+    // local CapsLock on, server's off: type 'a' without touching CapsLock
+    KeyMap::Keystrokes keys;
+    KeyMap::ModifierToKeys active{{KeyModifierCapsLock, caps}};
+    KeyModifierMask state = KeyModifierCapsLock;
+    ASSERT_NE(nullptr, keyMap.mapKey(keys, 'a', 0, active, state, 0, false));
+    EXPECT_FALSE(pressesCapsLock(keys));
+    EXPECT_EQ(KeyModifierCapsLock, state);
+
+    // server's CapsLock on, local off: a non-letter doesn't flash CapsLock
+    keys.clear();
+    active.clear();
+    state = 0;
+    ASSERT_NE(nullptr, keyMap.mapKey(keys, ' ', 0, active, state,
+                                     KeyModifierCapsLock, false));
+    EXPECT_FALSE(pressesCapsLock(keys));
+    EXPECT_EQ(0u, state);
+
+    // the CapsLock key itself still toggles it, and it stays toggled
+    keys.clear();
+    ASSERT_NE(nullptr, keyMap.mapKey(keys, kKeyCapsLock, 0, active, state, 0, false));
+    EXPECT_TRUE(pressesCapsLock(keys));
+    EXPECT_EQ(KeyModifierCapsLock, state);
+}
+
+TEST(KeyMapTests, mapKey_defaultCapsLock_followsServerCapsLock)
+{
+    KeyMap keyMap;
+    buildCapsTestMap(keyMap);
+
+    // other clients still toggle CapsLock to match the server's
+    KeyMap::Keystrokes keys;
+    KeyMap::ModifierToKeys active;
+    KeyModifierMask state = 0;
+    ASSERT_NE(nullptr, keyMap.mapKey(keys, ' ', 0, active, state,
+                                     KeyModifierCapsLock, false));
+    EXPECT_TRUE(pressesCapsLock(keys));
 }
 
 }

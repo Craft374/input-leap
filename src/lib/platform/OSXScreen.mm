@@ -73,6 +73,10 @@ namespace {
 
 constexpr std::uint64_t kHidEventMatchToleranceNs = 5'000'000;
 
+// "Select next source in Input menu".  Karabiner turns Caps Lock into F18,
+// which is bound to this, and WindowServer eats the key before our event tap.
+constexpr int kInputSourceHotKey = 61;
+
 long hidDeviceNumber(IOHIDDeviceRef device, CFStringRef key)
 {
 	CFTypeRef value = IOHIDDeviceGetProperty(device, key);
@@ -1030,6 +1034,7 @@ OSXScreen::disable()
         m_clipboardTimer = nullptr;
 	}
 
+	restoreInputSourceHotKey();
 	m_isOnScreen = m_isPrimary;
 }
 
@@ -1039,6 +1044,7 @@ OSXScreen::enter()
     // Mark as on screen so other events are handled as on screen.
     // Mitigates https://github.com/input-leap/input-leap/issues/1043 from the bogus movement check
 	m_isOnScreen = true;
+	restoreInputSourceHotKey();
 
 	showCursor();
 
@@ -1107,10 +1113,27 @@ OSXScreen::leave()
 	if (m_isPrimary) {
 		avoidHesitatingCursor();
 
+		// let F18 (Caps Lock) reach the event tap instead of switching the
+		// Mac's input source while a remote screen is being controlled.
+		// ponytail: a crash here leaves the shortcut off until re-login (the
+		// change isn't saved to settings); restore it at startup if that bites.
+		if (CGSIsSymbolicHotKeyEnabled(kInputSourceHotKey)) {
+			CGSSetSymbolicHotKeyEnabled(kInputSourceHotKey, false);
+			m_inputSourceHotKeyOff = true;
+		}
 	}
 
 	// now off screen
 	m_isOnScreen = false;
+}
+
+void
+OSXScreen::restoreInputSourceHotKey()
+{
+	if (m_inputSourceHotKeyOff) {
+		CGSSetSymbolicHotKeyEnabled(kInputSourceHotKey, true);
+		m_inputSourceHotKeyOff = false;
+	}
 }
 
 bool
@@ -1509,12 +1532,22 @@ OSXScreen::onKey(CGEventRef event)
 	bool up		  = (eventKind == kCGEventKeyUp);
 	bool isRepeat = (CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) == 1);
 
+	// Karabiner turns Caps Lock into F18 (the Mac's input source key); on a
+	// remote screen send it as Caps Lock.  a repeat would toggle it again.
+	const bool capsLockKey = !m_isOnScreen && virtualKey == kVK_F18;
+	if (capsLockKey && isRepeat) {
+		return true;
+	}
+
 	// map event to keys
 	KeyModifierMask mask;
 	OSXKeyState::KeyIDs keys;
 	KeyButton button = m_keyState->mapKeyFromEvent(keys, &mask, event);
 	if (button == 0) {
 		return false;
+	}
+	if (capsLockKey && down) {
+		keys.assign(1, kKeyCapsLock);
 	}
 
 	// check for AltGr in mask.  if set we send neither the AltGr nor

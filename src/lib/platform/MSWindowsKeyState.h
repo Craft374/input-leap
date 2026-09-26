@@ -164,6 +164,7 @@ protected:
 	virtual void		fakeKey(const Keystroke& keystroke);
 	virtual KeyModifierMask&
 						getActiveModifiersRValue();
+	virtual bool		isIgnoredKey(KeyID key, KeyModifierMask mask) const;
 
 private:
 	typedef std::vector<HKL> GroupList;

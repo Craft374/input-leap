@@ -264,7 +264,11 @@ OSXKeyState::mapKeyFromEvent(KeyIDs& ids,
     static const std::uint32_t s_commandModifiers =
         cmdKey | controlKey | rightControlKey;
     bool isCommand = ((modifiers & s_commandModifiers) != 0);
-    modifiers &= ~s_commandModifiers;
+    // also drop CapsLock: the client applies its own CapsLock to the key
+    // (see KeyMap::mapCharacterKey), so send the unlocked character.
+    // ponytail: non-Windows clients no longer see this Mac's Caps Lock in
+    // letter case; gate on the client type if that matters.
+    modifiers &= ~(s_commandModifiers | alphaLock);
 
     // if we've used a command key then we want the glyph produced without
     // the option key (i.e. the base glyph).

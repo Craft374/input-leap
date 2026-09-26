@@ -193,6 +193,13 @@ public:
     */
     virtual void addHalfDuplexModifier(KeyID key);
 
+    //! Keep the local CapsLock state
+    /*!
+    If \p own is \c true then keys never toggle CapsLock to match the
+    requested modifiers;  only the CapsLock key itself changes it.
+    */
+    void setOwnCapsLock(bool own) { m_ownCapsLock = own; }
+
     //! Finish adding entries
     /*!
     Called after adding entries, this does some internal housekeeping.
@@ -477,6 +484,9 @@ private:
 
     // composition info
     bool m_composeAcrossGroups;
+
+    // true if CapsLock is only changed by the CapsLock key itself
+    bool m_ownCapsLock = false;
 
     // half-duplex info
     KeyButtonSet m_halfDuplex; // half-duplex set by InputLeap

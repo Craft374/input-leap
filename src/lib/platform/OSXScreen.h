@@ -44,6 +44,8 @@ extern "C" {
     typedef int CGSConnectionID;
     CGError CGSSetConnectionProperty(CGSConnectionID cid, CGSConnectionID targetCID, CFStringRef key, CFTypeRef value);
     int _CGSDefaultConnection();
+    CGError CGSSetSymbolicHotKeyEnabled(int hotKey, bool enabled);
+    bool CGSIsSymbolicHotKeyEnabled(int hotKey);
 }
 
 class Thread;
@@ -133,6 +135,7 @@ private:
     bool onKey(CGEventRef event);
 
     void onMediaKey(CGEventRef event);
+    void restoreInputSourceHotKey();
     void onFunctionKey(int number, bool down, bool isRepeat);
 
     bool onHotKey(EventRef event) const;
@@ -290,6 +293,7 @@ private:
     OSXInputDeviceMonitor* m_inputDeviceMonitor;
     bool m_mapMacFunctionKeys;
     std::map<std::uint32_t, bool> m_localKeyCodes;
+    bool m_inputSourceHotKeyOff = false;
 
     // clipboards
     OSXClipboard m_pasteboard;
