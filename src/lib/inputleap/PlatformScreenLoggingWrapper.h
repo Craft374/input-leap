@@ -98,6 +98,8 @@ public:
 
     void handle_system_event(const Event& event) override;
 
+    IPlatformScreen* wrapped() const { return screen_.get(); }
+
 private:
     std::unique_ptr<IPlatformScreen> screen_;
 };

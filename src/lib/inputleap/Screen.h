@@ -302,7 +302,8 @@ public:
                   std::int32_t& height) const override;
     void getCursorPos(std::int32_t& x, std::int32_t& y) const override;
 
-    IPlatformScreen* getPlatformScreen() { return m_screen.get(); }
+    // the real platform screen, even when DEBUG2 wraps it for logging
+    IPlatformScreen* getPlatformScreen();
 
 protected:
     void enablePrimary();

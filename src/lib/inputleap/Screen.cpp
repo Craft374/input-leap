@@ -18,6 +18,7 @@
 
 #include "inputleap/Screen.h"
 #include "inputleap/IPlatformScreen.h"
+#include "inputleap/PlatformScreenLoggingWrapper.h"
 #include "inputleap/protocol_types.h"
 #include "base/Log.h"
 #include "base/IEventQueue.h"
@@ -54,6 +55,14 @@ Screen::~Screen()
     assert(!m_enabled);
     assert(m_entered == m_isPrimary);
     LOG_DEBUG("closed display");
+}
+
+IPlatformScreen* Screen::getPlatformScreen()
+{
+    if (auto* wrapper = dynamic_cast<PlatformScreenLoggingWrapper*>(m_screen.get())) {
+        return wrapper->wrapped();
+    }
+    return m_screen.get();
 }
 
 void
