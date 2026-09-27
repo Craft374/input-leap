@@ -123,7 +123,7 @@ private:
     void sendClipboardEvent(EventType type, ClipboardID id) const;
 
     // message handlers
-    bool onMouseMove(CGFloat mx, CGFloat my, CGFloat dx, CGFloat dy);
+    bool onMouseMove(CGFloat mx, CGFloat my);
     // mouse button handler.  pressed is true if this is a mousedown
     // event, false if it is a mouseup event.  macButton is the index
     // of the button pressed using the mac button mapping.
