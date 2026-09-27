@@ -1298,22 +1298,20 @@ void OSXScreen::handle_system_event(const Event& event)
 }
 
 bool
-OSXScreen::onMouseMove(CGFloat mx, CGFloat my)
+OSXScreen::onMouseMove(CGFloat mx, CGFloat my, CGFloat dx, CGFloat dy)
 {
-	LOG_DEBUG2("mouse move %+f,%+f", mx, my);
-
-	CGFloat x = mx - m_xCursor;
-	CGFloat y = my - m_yCursor;
-
-	if ((x == 0 && y == 0) || (mx == m_xCenter && mx == m_yCenter)) {
-		return true;
-	}
-
-	// save position to compute delta of next motion
-    m_xCursor = (std::int32_t)mx;
-    m_yCursor = (std::int32_t)my;
+	LOG_DEBUG2("mouse move %+f,%+f pos delta %+f,%+f event delta %+f,%+f",
+		mx, my, mx - m_xCursor, my - m_yCursor, dx, dy);
 
 	if (m_isOnScreen) {
+		if ((mx == m_xCursor && my == m_yCursor) || (mx == m_xCenter && my == m_yCenter)) {
+			return true;
+		}
+
+		// save position to compute delta of next motion
+		m_xCursor = (std::int32_t)mx;
+		m_yCursor = (std::int32_t)my;
+
 		// motion on primary screen
         sendEvent(EventType::PRIMARY_SCREEN_MOTION_ON_PRIMARY,
                   create_event_data<MotionInfo>(MotionInfo{m_xCursor, m_yCursor}));
@@ -1322,9 +1320,20 @@ OSXScreen::onMouseMove(CGFloat mx, CGFloat my)
 		}
 	}
 	else {
+		if (dx == 0 && dy == 0) {
+			return true;
+		}
+
 		// motion on secondary screen.  warp mouse back to
 		// center.
 		warpCursor(m_xCenter, m_yCenter);
+
+		// use the event's own motion, not its position minus the center:
+		// events already queued when we warped still carry pre-warp
+		// positions, so position deltas double-count motion under load
+		// (mouse overshoots and "sensitivity" drifts).
+		CGFloat x = dx;
+		CGFloat y = dy;
 
 		// examine the motion.  if it's about the distance
 		// from the center of the screen to an edge then
@@ -1756,10 +1765,16 @@ void OSXScreen::handle_drag()
 	CGPoint p = CGEventGetLocation(event);
 	CFRelease(event);
 
+	// off screen the event tap already gets the drag events with their
+	// motion; polling here too would count it twice.
+	if (!m_isOnScreen) {
+		return;
+	}
+
 	if ((short)p.x != m_dragLastPoint.h || (short)p.y != m_dragLastPoint.v) {
 		m_dragLastPoint.h = (short)p.x;
 		m_dragLastPoint.v = (short)p.y;
-        onMouseMove((std::int32_t)p.x, (std::int32_t)p.y);
+        onMouseMove((std::int32_t)p.x, (std::int32_t)p.y, 0, 0);
 	}
 }
 
@@ -2234,7 +2249,9 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 		case kCGEventOtherMouseDragged:
 		case kCGEventMouseMoved:
 			pos = CGEventGetLocation(event);
-			screen->onMouseMove(pos.x, pos.y);
+			screen->onMouseMove(pos.x, pos.y,
+				CGEventGetDoubleValueField(event, kCGMouseEventDeltaX),
+				CGEventGetDoubleValueField(event, kCGMouseEventDeltaY));
 
 			// The system ignores our cursor-centering calls if
 			// we don't return the event. This should be harmless,
