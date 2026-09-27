@@ -51,6 +51,7 @@ bool PlatformScreenLoggingWrapper::canLeave()
 void PlatformScreenLoggingWrapper::leave()
 {
     LOG_DEBUG1("PlatformScreen::leave()");
+    screen_->leave();
 }
 
 bool PlatformScreenLoggingWrapper::setClipboard(ClipboardID id, const IClipboard* clipboard)
