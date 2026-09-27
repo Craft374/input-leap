@@ -40,3 +40,6 @@ bundle
 compile_commands.json
 # Cache (used by clangd)
 .cache
+
+# 로컬 실행용 바로가기 (build/bundle을 가리키는 개인 alias)
+실행_바로가기
