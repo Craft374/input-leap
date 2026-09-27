@@ -2234,6 +2234,11 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 		case kCGEventOtherMouseDragged:
 		case kCGEventMouseMoved:
 			pos = CGEventGetLocation(event);
+			LOG_DEBUG2("mouse event t=%lluus pos %.1f,%.1f delta %+.1f,%+.1f",
+				static_cast<unsigned long long>(cgEventTimestampNanoseconds(event) / 1000),
+				pos.x, pos.y,
+				CGEventGetDoubleValueField(event, kCGMouseEventDeltaX),
+				CGEventGetDoubleValueField(event, kCGMouseEventDeltaY));
 			screen->onMouseMove(pos.x, pos.y);
 
 			// The system ignores our cursor-centering calls if
