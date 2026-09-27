@@ -272,6 +272,10 @@ private:
     // mouse state
     mutable std::int32_t m_xCursor, m_yCursor;
     mutable bool m_cursorPosValid;
+    // unrounded last cursor position, and how many events have passed since
+    // a warp that hasn't shown up in event positions yet, 0 = none (see onMouseMove)
+    CGFloat m_xLast = 0, m_yLast = 0;
+    std::uint32_t m_warpPendingEvents = 0;
 
     /* FIXME: this data structure is explicitly marked mutable due
        to a need to track the state of buttons since the remote

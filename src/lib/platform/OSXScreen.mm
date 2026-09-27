@@ -499,6 +499,7 @@ void OSXScreen::warpCursor(std::int32_t x, std::int32_t y)
 	m_xCursor        = x;
 	m_yCursor        = y;
 	m_cursorPosValid = true;
+	m_warpPendingEvents = 1;
 }
 
 void
@@ -1044,6 +1045,7 @@ OSXScreen::enter()
     // Mark as on screen so other events are handled as on screen.
     // Mitigates https://github.com/input-leap/input-leap/issues/1043 from the bogus movement check
 	m_isOnScreen = true;
+	m_warpPendingEvents = 0;
 	restoreInputSourceHotKey();
 
 	showCursor();
@@ -1302,62 +1304,80 @@ OSXScreen::onMouseMove(CGFloat mx, CGFloat my)
 {
 	LOG_DEBUG2("mouse move %+f,%+f", mx, my);
 
-	CGFloat x = mx - m_xCursor;
-	CGFloat y = my - m_yCursor;
-
-	if ((x == 0 && y == 0) || (mx == m_xCenter && mx == m_yCenter)) {
-		return true;
-	}
-
-	// save position to compute delta of next motion
-    m_xCursor = (std::int32_t)mx;
-    m_yCursor = (std::int32_t)my;
-
 	if (m_isOnScreen) {
+		m_xLast = mx;
+		m_yLast = my;
+		if ((mx == m_xCursor && my == m_yCursor) || (mx == m_xCenter && my == m_yCenter)) {
+			return true;
+		}
+
+		// save position to compute delta of next motion
+		m_xCursor = (std::int32_t)mx;
+		m_yCursor = (std::int32_t)my;
+
 		// motion on primary screen
         sendEvent(EventType::PRIMARY_SCREEN_MOTION_ON_PRIMARY,
                   create_event_data<MotionInfo>(MotionInfo{m_xCursor, m_yCursor}));
 		if (m_buttonState.test(0)) {
 			m_draggingStarted = true;
 		}
+		return true;
 	}
-	else {
-		// motion on secondary screen.  warp mouse back to
-		// center.
-		warpCursor(m_xCenter, m_yCenter);
 
-		// examine the motion.  if it's about the distance
-		// from the center of the screen to an edge then
-		// it's probably a bogus motion that we want to
-		// ignore (see warpCursorNoFlush() for a further
-		// description).
-        static std::int32_t bogusZoneSize = 10;
-		if (-x + bogusZoneSize > m_xCenter - m_x ||
-			 x + bogusZoneSize > m_x + m_w - m_xCenter ||
-			-y + bogusZoneSize > m_yCenter - m_y ||
-			 y + bogusZoneSize > m_y + m_h - m_yCenter) {
-			LOG_DEBUG("dropped bogus motion %+.2f,%+.2f", x, y);
+	// motion on secondary screen.  the move is measured from where the
+	// cursor last was: the previous event's position, or the spot we warped
+	// to once that warp shows up.  a warp shows up a few events late at high
+	// polling rates (measuring from the warp target every time re-sent the
+	// same offset and made the remote cursor run off), so while one is
+	// pending take whichever reading is smaller.
+	// ponytail: assumes one event moves less than kWarpZone / 2.
+	CGFloat x = mx - m_xLast;
+	CGFloat y = my - m_yLast;
+	if (m_warpPendingEvents != 0) {
+		const CGFloat wx = mx - m_xCursor;
+		const CGFloat wy = my - m_yCursor;
+		if (wx * wx + wy * wy <= x * x + y * y) {
+			x = wx;
+			y = wy;
+			m_warpPendingEvents = 0;
 		}
 		else {
-			// send motion
-			// Accumulate together the move into the running total
-			static CGFloat m_xFractionalMove = 0;
-			static CGFloat m_yFractionalMove = 0;
-
-			m_xFractionalMove += x;
-			m_yFractionalMove += y;
-
-			// Return the integer part
-            std::int32_t intX = (std::int32_t)m_xFractionalMove;
-            std::int32_t intY = (std::int32_t)m_yFractionalMove;
-
-			// And keep only the fractional part
-			m_xFractionalMove -= intX;
-			m_yFractionalMove -= intY;
-            sendEvent(EventType::PRIMARY_SCREEN_MOTION_ON_SECONDARY,
-                      create_event_data<MotionInfo>(MotionInfo{intX, intY}));
+			++m_warpPendingEvents;
 		}
 	}
+	m_xLast = mx;
+	m_yLast = my;
+
+	// warp back to center only once the cursor is well away from it, so a
+	// landed warp is unmistakable, and not again while one is in flight
+	// (its late landing would read as motion) unless it looks lost.
+	static const CGFloat kWarpZone = 150;
+	const CGFloat away = std::max(std::fabs(mx - m_xCenter), std::fabs(my - m_yCenter));
+	if (away > kWarpZone && (m_warpPendingEvents == 0 || m_warpPendingEvents > 100)) {
+		warpCursor(m_xCenter, m_yCenter);
+	}
+
+	if (x == 0 && y == 0) {
+		return true;
+	}
+
+	// send motion
+	// Accumulate together the move into the running total
+	static CGFloat m_xFractionalMove = 0;
+	static CGFloat m_yFractionalMove = 0;
+
+	m_xFractionalMove += x;
+	m_yFractionalMove += y;
+
+	// Return the integer part
+	std::int32_t intX = (std::int32_t)m_xFractionalMove;
+	std::int32_t intY = (std::int32_t)m_yFractionalMove;
+
+	// And keep only the fractional part
+	m_xFractionalMove -= intX;
+	m_yFractionalMove -= intY;
+	sendEvent(EventType::PRIMARY_SCREEN_MOTION_ON_SECONDARY,
+			  create_event_data<MotionInfo>(MotionInfo{intX, intY}));
 
 	return true;
 }
@@ -1755,6 +1775,11 @@ void OSXScreen::handle_drag()
     CGEventRef event = CGEventCreate(nullptr);
 	CGPoint p = CGEventGetLocation(event);
 	CFRelease(event);
+
+	// off screen the event tap already gets these drags with exact positions
+	if (!m_isOnScreen) {
+		return;
+	}
 
 	if ((short)p.x != m_dragLastPoint.h || (short)p.y != m_dragLastPoint.v) {
 		m_dragLastPoint.h = (short)p.x;
