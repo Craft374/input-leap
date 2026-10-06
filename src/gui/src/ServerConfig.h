@@ -19,6 +19,7 @@
 #pragma once
 
 #include <QList>
+#include <QVariantMap>
 
 #include "Screen.h"
 #include "BaseConfig.h"
@@ -62,6 +63,7 @@ class ServerConfig : public BaseConfig
         bool enableDragAndDrop() const { return m_EnableDragAndDrop; }
         bool clipboardSharing() const { return m_ClipboardSharing; }
         size_t clipboardSharingSize() const { return m_ClipboardSharingSize; }
+        bool gameMode() const { return m_GameMode; }
         static size_t defaultClipboardSharingSize();
 
         void saveSettings();
@@ -70,6 +72,12 @@ class ServerConfig : public BaseConfig
         void save(QFile& file) const;
         int numScreens() const;
         int autoAddScreen(const QString name);
+
+        // Layout transfer between machines. fromVariantMap() validates everything first and
+        // leaves the current config untouched (returns false, Korean message) on bad input.
+        QVariantMap toVariantMap();
+        bool fromVariantMap(const QVariantMap& map, QString* error = nullptr);
+        bool hasScreen(const QString& name) const;
 
     protected:
         QSettings& settings() { return *m_pSettings; }
@@ -92,6 +100,7 @@ class ServerConfig : public BaseConfig
         void setIgnoreAutoConfigClient(bool on) { m_IgnoreAutoConfigClient = on; }
         void setEnableDragAndDrop(bool on) { m_EnableDragAndDrop = on; }
         void setClipboardSharing(bool on) { m_ClipboardSharing = on; }
+        void setGameMode(bool on) { m_GameMode = on; }
         size_t setClipboardSharingSize(size_t size);
         QList<bool>& switchCorners() { return m_SwitchCorners; }
         std::vector<Hotkey>& hotkeys() { return m_Hotkeys; }
@@ -127,6 +136,7 @@ class ServerConfig : public BaseConfig
         bool m_EnableDragAndDrop;
         bool m_ClipboardSharing;
         size_t m_ClipboardSharingSize;
+        bool m_GameMode;
         MainWindow* m_pMainWindow;
 };
 

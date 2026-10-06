@@ -41,6 +41,7 @@ ServerConfigDialog::ServerConfigDialog(QWidget* parent, ServerConfig& config, co
     ui_->m_pSpinBoxHeartbeat->setValue(serverConfig().heartbeat());
 
     ui_->m_pCheckBoxRelativeMouseMoves->setChecked(serverConfig().relativeMouseMoves());
+    ui_->m_pCheckBoxGameMode->setChecked(serverConfig().gameMode());
     ui_->m_pCheckBoxScreenSaverSync->setChecked(serverConfig().screenSaverSync());
     ui_->m_pCheckBoxWin32KeepForeground->setChecked(serverConfig().win32KeepForeground());
 
@@ -80,6 +81,7 @@ void ServerConfigDialog::accept()
     serverConfig().setHeartbeat(ui_->m_pSpinBoxHeartbeat->value());
 
     serverConfig().setRelativeMouseMoves(ui_->m_pCheckBoxRelativeMouseMoves->isChecked());
+    serverConfig().setGameMode(ui_->m_pCheckBoxGameMode->isChecked());
     serverConfig().setScreenSaverSync(ui_->m_pCheckBoxScreenSaverSync->isChecked());
     serverConfig().setWin32KeepForeground(ui_->m_pCheckBoxWin32KeepForeground->isChecked());
 

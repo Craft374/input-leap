@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="color-scheme" content="light dark">
+<title>휴대폰 트랙패드</title>
+<style>
+:root{--bg:#f2f2f7;--fg:#1c1c1e;--sub:#6e6e73;--pad:#fff;--bd:#d1d1d6;--ac:#0a84ff;--btn:#e5e5ea;--ok:#30d158;--wn:#ff9f0a;--er:#ff453a}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--fg:#f2f2f7;--sub:#98989d;--pad:#1c1c1e;--bd:#3a3a3c;--btn:#2c2c2e}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--fg);
+ font:15px/1.3 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+ -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#app{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;flex-direction:column;
+ padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#bar{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:14px}
+#dot{width:10px;height:10px;border-radius:50%;background:var(--er);flex:none}
+#dot.ok{background:var(--ok)}#dot.wait{background:var(--wn)}
+#st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#warn{display:none;margin:0 8px 4px;padding:8px 10px;border-radius:10px;background:var(--wn);color:#000;font-size:13px}
+#pad *{pointer-events:none}   /* keep the pad itself the touch target so targetTouches holds every finger */
+#pad{flex:1;min-height:40px;margin:4px 8px;border:1px solid var(--bd);border-radius:16px;background:var(--pad);
+ touch-action:none;display:flex;align-items:center;justify-content:center;color:var(--sub);text-align:center;padding:12px}
+.row{display:flex;gap:6px;padding:4px 8px}
+.sc{overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;scrollbar-width:none}
+.sc::-webkit-scrollbar{display:none}
+.b{flex:none;border:0;border-radius:10px;background:var(--btn);color:var(--fg);font:inherit;min-height:44px;min-width:44px;
+ padding:8px 12px;touch-action:manipulation;white-space:nowrap}
+.b.on{background:var(--ac);color:#fff}
+.b.fl{flex:1}.b.big{flex:2}
+.b:active{filter:brightness(.85)}
+#kb{display:none;padding-bottom:4px}
+#kb.open{display:block}
+#txt{flex:1;min-width:0;height:44px;border:1px solid var(--bd);border-radius:10px;padding:0 10px;background:var(--pad);color:var(--fg);
+ font-size:16px;-webkit-user-select:text;user-select:text}
+#kb.direct #send{display:none}
+.hint{padding:0 12px;font-size:12px;color:var(--sub)}
+#pin,#sheet{position:fixed;left:0;top:0;width:100%;height:100%;display:none;z-index:5}
+#pin{background:var(--bg);align-items:center;justify-content:center}
+#pin.open{display:flex}
+#pin .box{width:min(320px,86%);display:flex;flex-direction:column;gap:12px;text-align:center}
+#pin input{height:48px;border:1px solid var(--bd);border-radius:10px;padding:0 12px;font-size:18px;text-align:center;background:var(--pad);color:var(--fg);
+ -webkit-user-select:text;user-select:text}
+#perr{color:var(--er);min-height:1.3em;font-size:14px}
+#sheet{background:rgba(0,0,0,.45);align-items:flex-end}
+#sheet.open{display:flex}
+#sheet .box{width:100%;max-height:85%;overflow-y:auto;background:var(--bg);border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+ display:flex;flex-direction:column;gap:14px}
+#sheet label{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#sheet input[type=range]{flex:1;max-width:55%}
+#sheet input[type=checkbox]{width:22px;height:22px}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:90%;padding:8px 14px;border-radius:18px;
+ background:rgba(0,0,0,.8);color:#fff;font-size:13px;display:none;z-index:9;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+ <div id="bar"><span id="dot"></span><span id="st">연결 안 됨</span></div>
+ <div id="warn">이 PC는 InputLeap 클라이언트입니다. 휴대폰 입력은 이 PC에만 적용됩니다. 마우스·키보드를 공유하는 서버 PC 주소로 다시 접속하세요.</div>
+ <div id="pad"><span id="padhint">한 손가락: 이동 / 탭: 클릭<br>두 손가락 탭: 우클릭 / 두 손가락 드래그: 스크롤<br>길게 누른 뒤 드래그: 끌기</span></div>
+ <div id="kb">
+  <div class="row"><input id="txt" type="text" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="입력할 내용"><button class="b" id="send">전송</button><button class="b" id="dir">직접 입력</button></div>
+  <div class="hint" id="dirhint" style="display:none">직접 입력: 글자(단어)가 확정되면 바로 전송됩니다.</div>
+  <div class="row sc" id="rkeys"></div>
+  <div class="row sc" id="rmods"></div>
+  <div class="row sc" id="rcombo"></div>
+ </div>
+ <div class="row" id="rbtn">
+  <button class="b big" data-mb="0">좌클릭</button>
+  <button class="b fl" data-mb="2">휠</button>
+  <button class="b big" data-mb="1">우클릭</button>
+  <button class="b" id="lock">잠금</button>
+  <button class="b" id="kbt">키보드</button>
+  <button class="b" id="gear">설정</button>
+ </div>
+</div>
+
+<div id="pin"><div class="box">
+ <h2 style="margin:0">휴대폰 트랙패드</h2>
+ <div style="color:var(--sub)">PC의 InputLeap 설정 화면에 표시된 PIN을 입력하세요.</div>
+ <input id="pinin" type="password" autocomplete="current-password" maxlength="16" placeholder="PIN">
+ <div id="perr"></div>
+ <button class="b on" id="pingo">연결</button>
+</div></div>
+
+<div id="sheet"><div class="box">
+ <label>커서 속도 <input id="sSens" type="range" min="0.5" max="4" step="0.1"></label>
+ <label>스크롤 속도 <input id="sScr" type="range" min="0.5" max="4" step="0.1"></label>
+ <label>스크롤 방향 반전 <input id="sRev" type="checkbox"></label>
+ <label>탭하여 클릭 <input id="sTap" type="checkbox"></label>
+ <label>진동 <input id="sVib" type="checkbox"></label>
+ <label>화면 켜짐 유지 <input id="sWake" type="checkbox"></label>
+ <button class="b" id="repin">PIN 다시 입력</button>
+ <button class="b on" id="sclose">닫기</button>
+</div></div>
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+function $(i){return document.getElementById(i)}
+function ld(k,d){try{var v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}}
+function sv(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function rm(k){try{localStorage.removeItem(k)}catch(e){}}
+
+/* ---- settings ---- */
+var cfg={sens:1.5,scroll:1.5,rev:false,tap:true,vib:true,wake:false};
+try{var o=JSON.parse(ld('ph.cfg','{}'));for(var k in cfg){if(typeof o[k]===typeof cfg[k])cfg[k]=o[k]}}catch(e){}
+function saveCfg(){sv('ph.cfg',JSON.stringify(cfg))}
+function buzz(ms){if(cfg.vib&&navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}}}
+
+/* ---- connection ---- */
+var ws=null,authed=false,pin=ld('ph.pin',''),tries=0,rt=0,pingT=0,stopRetry=false,hello=null;
+function send(o){if(ws&&authed&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function setStatus(c,t){$('dot').className=c;$('st').textContent=t}
+function toast(m){var t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){t.style.display='none'},3000)}
+function showPin(msg){$('perr').textContent=msg||'';$('pin').className='open';$('pinin').value=pin;setTimeout(function(){$('pinin').focus()},50)}
+function retry(){clearTimeout(rt);var d=Math.min(10000,1000*Math.pow(2,tries++));rt=setTimeout(connect,d)}
+function connect(){
+  clearTimeout(rt);
+  if(!pin){showPin();return}
+  if(ws&&ws.readyState<2)return;
+  setStatus('wait','연결 중...');
+  var s;
+  try{s=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){retry();return}
+  ws=s;authed=false;
+  s.onopen=function(){if(ws===s)s.send(JSON.stringify({t:'auth',pin:pin}))};
+  s.onmessage=function(ev){if(ws===s)onMsg(ev.data)};
+  s.onclose=function(){
+    if(ws!==s)return;
+    ws=null;authed=false;hello=null;clearInterval(pingT);resetLocal();$('warn').style.display='none';
+    if(stopRetry){setStatus('','연결 안 됨');return}
+    setStatus('wait','연결 끊김 - 다시 연결 중...');retry();
+  };
+  s.onerror=function(){};
+}
+function onMsg(data){
+  var m;
+  try{m=JSON.parse(data)}catch(e){return}
+  if(!m||typeof m!=='object')return;
+  if(m.t==='hello'){
+    if(m.ok===true){
+      authed=true;hello=m;tries=0;sv('ph.pin',pin);$('pin').className='';
+      setLabels(m.os);showInfo();
+      clearInterval(pingT);pingT=setInterval(function(){send({t:'ping'})},15000);
+      wake();
+    }else{
+      stopRetry=true;
+      var msg=typeof m.m==='string'?m.m:'연결할 수 없습니다';
+      if(msg.indexOf('PIN')>=0){pin='';rm('ph.pin')}
+      showPin(msg);
+    }
+  }else if(m.t==='warn'&&typeof m.m==='string'){toast(m.m)}
+}
+function showInfo(){
+  var os=hello.os==='mac'?'Mac':hello.os==='win'?'Windows':'기타';
+  var role=hello.role==='server'?'서버':hello.role==='client'?'클라이언트':'';
+  var t=(typeof hello.name==='string'&&hello.name?hello.name+' · ':'')+os+(role?' · '+role:'');
+  setStatus('ok',t);
+  $('warn').style.display=hello.role==='client'?'block':'none';
+}
+
+/* ---- input helpers ---- */
+var MODS=['Ctrl','Alt','Shift','Meta'],modOn={},modBtn={},held={},dragLock=false;
+function btn(b,d){send({t:'btn',b:b,d:d})}
+function click(b){btn(b,1);setTimeout(function(){btn(b,0)},30)}
+function refreshMods(){MODS.forEach(function(k){modBtn[k].className='b'+(modOn[k]?' on':'')});$('lock').className='b'+(dragLock?' on':'')}
+function releaseMods(){MODS.forEach(function(k){if(modOn[k]){send({t:'key',k:k,d:0});modOn[k]=false}});refreshMods()}
+function tapKey(k){send({t:'tap',k:k});releaseMods()}
+function sendText(s){var a=Array.from(s);for(var i=0;i<a.length;i+=400)send({t:'text',s:a.slice(i,i+400).join('')})}
+function combo(mods,k){
+  var p=mods.filter(function(m){return !modOn[m]});
+  p.forEach(function(m){send({t:'key',k:m,d:1})});
+  send({t:'tap',k:k});
+  p.slice().reverse().forEach(function(m){send({t:'key',k:m,d:0})});
+  releaseMods();
+}
+// local state is reset whenever the server drops everything (rel / socket close)
+function resetLocal(){
+  MODS.forEach(function(k){modOn[k]=false});dragLock=false;held={};
+  for(var i=0;i<mbs.length;i++)mbs[i].classList.remove('on');
+  if(typeof endG==='function')endG(true);
+  refreshMods();
+}
+function release(){send({t:'rel'});resetLocal()}
+
+/* ---- touchpad ---- */
+var pad=$('pad'),g={mode:'idle'},mvX=0,mvY=0,scX=0,scY=0,remX=0,remY=0,sRX=0,sRY=0;
+function cen(ts){var x=0,y=0;for(var i=0;i<ts.length;i++){x+=ts[i].clientX;y+=ts[i].clientY}return{x:x/ts.length,y:y/ts.length}}
+function clamp(v){return v>50?50:v<-50?-50:v}
+function flush(){
+  if(mvX||mvY){
+    var m=Math.sqrt(mvX*mvX+mvY*mvY),k=cfg.sens*(1+Math.min(m,30)*0.05);   // acceleration: up to 2.5x on fast swipes
+    remX+=mvX*k;remY+=mvY*k;mvX=mvY=0;
+    var ix=Math.trunc(remX),iy=Math.trunc(remY);remX-=ix;remY-=iy;
+    if(ix||iy)send({t:'mv',dx:ix,dy:iy});
+  }
+  if(scX||scY){
+    var f=cfg.scroll/24*(cfg.rev?-1:1);   // natural: finger down -> content down (wheel up, dy>0); finger right -> dx<0
+    sRY+=scY*f;sRX-=scX*f;scX=scY=0;
+    var jx=clamp(Math.trunc(sRX)),jy=clamp(Math.trunc(sRY));sRX-=Math.trunc(sRX);sRY-=Math.trunc(sRY);
+    if(jx||jy)send({t:'sc',dx:jx,dy:jy});
+  }
+}
+setInterval(flush,16);
+function endG(cancel){
+  clearTimeout(g.timer);
+  if(g.mode==='one'&&g.drag&&cancel!==true)btn(0,0);
+  flush();remX=remY=sRX=sRY=mvX=mvY=scX=scY=0;g={mode:'idle'};
+}
+pad.addEventListener('touchstart',function(e){
+  e.preventDefault();
+  var n=e.targetTouches.length,c;
+  if(n===1&&g.mode==='idle'){
+    var t=e.targetTouches[0];
+    g={mode:'one',id:t.identifier,x:t.clientX,y:t.clientY,t0:Date.now(),dist:0,drag:false};
+    g.timer=setTimeout(function(){
+      if(g.mode==='one'&&g.dist<10&&!dragLock){g.drag=true;btn(0,1);buzz(15)}   // long press = hold left button
+    },350);
+  }else if(n>=2){
+    if(g.mode==='one'&&g.drag)return;
+    if(g.mode==='ignore')return;
+    c=cen(e.targetTouches);
+    if(g.mode==='two'){g.x=c.x;g.y=c.y}
+    else{clearTimeout(g.timer);g={mode:'two',x:c.x,y:c.y,t0:Date.now(),dist:0}}
+  }
+},{passive:false});
+pad.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  var dx,dy;
+  if(g.mode==='one'){
+    var t=null;
+    for(var i=0;i<e.changedTouches.length;i++)if(e.changedTouches[i].identifier===g.id)t=e.changedTouches[i];
+    if(!t)return;
+    dx=t.clientX-g.x;dy=t.clientY-g.y;g.x=t.clientX;g.y=t.clientY;
+    g.dist+=Math.abs(dx)+Math.abs(dy);mvX+=dx;mvY+=dy;
+  }else if(g.mode==='two'&&e.targetTouches.length>=2){
+    var c=cen(e.targetTouches);
+    dx=c.x-g.x;dy=c.y-g.y;g.x=c.x;g.y=c.y;
+    g.dist+=Math.abs(dx)+Math.abs(dy);scX+=dx;scY+=dy;
+  }
+},{passive:false});
+function tEnd(e){
+  e.preventDefault();
+  var rem=e.targetTouches.length,cancel=e.type==='touchcancel';
+  if(cancel){endG();return}
+  if(g.mode==='one'){
+    var gone=false;
+    for(var i=0;i<e.changedTouches.length;i++)if(e.changedTouches[i].identifier===g.id)gone=true;
+    if(gone){
+      clearTimeout(g.timer);flush();
+      if(g.drag)btn(0,0);
+      else if(cfg.tap&&!dragLock&&g.dist<10&&Date.now()-g.t0<300){click(0);buzz(10)}
+      g={mode:'ignore'};
+    }
+  }else if(g.mode==='two'){
+    if(rem>=2){var c=cen(e.targetTouches);g.x=c.x;g.y=c.y}
+    else{
+      if(cfg.tap&&g.dist<10&&Date.now()-g.t0<350){click(1);buzz(10)}
+      g={mode:'ignore'};
+    }
+  }
+  if(rem===0)endG(true);
+}
+pad.addEventListener('touchend',tEnd,{passive:false});
+pad.addEventListener('touchcancel',tEnd,{passive:false});
+pad.addEventListener('contextmenu',function(e){e.preventDefault()});
+document.addEventListener('gesturestart',function(e){e.preventDefault()});
+
+/* ---- mouse buttons ---- */
+var mbs=document.querySelectorAll('[data-mb]');
+Array.prototype.forEach.call(mbs,function(el){
+  var b=+el.getAttribute('data-mb');
+  el.style.touchAction='none';
+  el.addEventListener('pointerdown',function(e){
+    e.preventDefault();try{el.setPointerCapture(e.pointerId)}catch(x){}
+    if(held[b])return;held[b]=true;el.classList.add('on');btn(b,1);buzz(10);
+  });
+  function up(){if(!held[b])return;held[b]=false;el.classList.remove('on');btn(b,0)}
+  el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+  el.addEventListener('contextmenu',function(e){e.preventDefault()});
+});
+$('lock').addEventListener('click',function(){if(!authed)return;dragLock=!dragLock;btn(0,dragLock?1:0);refreshMods();buzz(10)});
+
+/* ---- keyboard panel ---- */
+var kb=$('kb'),txt=$('txt'),direct=false;
+$('kbt').addEventListener('click',function(){
+  var open=kb.classList.toggle('open');
+  $('kbt').classList.toggle('on',open);
+  if(open)txt.focus();else txt.blur();
+});
+// keep the text field focused (and the soft keyboard up) while tapping panel buttons
+kb.addEventListener('mousedown',function(e){if(e.target!==txt)e.preventDefault()});
+function submitText(){var v=txt.value;if(!v){tapKey('Enter');return}txt.value='';sendText(v);releaseMods()}
+$('send').addEventListener('click',function(){if(txt.value){submitText();txt.focus()}});
+$('dir').addEventListener('click',function(){
+  direct=!direct;kb.classList.toggle('direct',direct);$('dir').classList.toggle('on',direct);
+  $('dirhint').style.display=direct?'block':'none';txt.value='';txt.focus();
+});
+function flushDirect(){var v=txt.value;if(v){txt.value='';sendText(v);releaseMods()}}
+txt.addEventListener('input',function(e){if(direct&&!e.isComposing)flushDirect()});
+txt.addEventListener('compositionend',function(){if(direct)flushDirect()});
+txt.addEventListener('keydown',function(e){
+  if(e.isComposing||e.keyCode===229)return;
+  if(e.key==='Enter'){e.preventDefault();if(direct)tapKey('Enter');else submitText()}
+  else if(direct&&e.key==='Backspace'&&!txt.value){e.preventDefault();tapKey('Backspace')}
+});
+function mk(parent,label,fn){var b=document.createElement('button');b.className='b';b.textContent=label;b.addEventListener('click',function(){fn(b)});parent.appendChild(b);return b}
+[['Esc','Escape'],['Tab','Tab'],['Enter','Enter'],['⌫','Backspace'],['Del','Delete'],['←','Left'],['↑','Up'],['↓','Down'],['→','Right'],
+ ['Home','Home'],['End','End'],['PgUp','PageUp'],['PgDn','PageDown']].forEach(function(a){mk($('rkeys'),a[0],function(){tapKey(a[1])})});
+for(var i=1;i<=12;i++)(function(n){mk($('rkeys'),'F'+n,function(){tapKey('F'+n)})})(i);
+MODS.forEach(function(k){modOn[k]=false;modBtn[k]=mk($('rmods'),k,function(){if(!authed)return;modOn[k]=!modOn[k];send({t:'key',k:k,d:modOn[k]?1:0});refreshMods();buzz(10)})});
+mk($('rmods'),'한/영',function(){send({t:'tap',k:'HangulToggle'})});
+[['C','c'],['V','v'],['X','x'],['Z','z'],['A','a']].forEach(function(a){mk($('rcombo'),'Ctrl+'+a[0],function(){combo(['Ctrl'],a[1])})});
+mk($('rcombo'),'Alt+Tab',function(){combo(['Alt'],'Tab')});
+function setLabels(os){
+  var L=os==='mac'?{Ctrl:'⌃',Alt:'⌥',Shift:'⇧',Meta:'⌘'}:{Ctrl:'Ctrl',Alt:'Alt',Shift:'Shift',Meta:'Win'};
+  MODS.forEach(function(k){modBtn[k].textContent=L[k]});
+}
+setLabels('win');
+
+/* ---- settings sheet ---- */
+var sh=$('sheet');
+function bind(id,key){
+  var el=$(id);
+  if(el.type==='checkbox')el.checked=cfg[key];else el.value=cfg[key];
+  el.addEventListener('input',function(){
+    cfg[key]=el.type==='checkbox'?el.checked:parseFloat(el.value);saveCfg();
+    if(key==='wake')wake();
+  });
+}
+bind('sSens','sens');bind('sScr','scroll');bind('sRev','rev');bind('sTap','tap');bind('sVib','vib');bind('sWake','wake');
+$('gear').addEventListener('click',function(){sh.className='open'});
+$('sclose').addEventListener('click',function(){sh.className=''});
+sh.addEventListener('click',function(e){if(e.target===sh)sh.className=''});
+$('repin').addEventListener('click',function(){
+  sh.className='';pin='';rm('ph.pin');stopRetry=true;if(ws)ws.close();showPin();
+});
+
+/* ---- PIN screen ---- */
+function pinGo(){
+  var v=$('pinin').value;
+  if(v.length<4){$('perr').textContent='PIN은 4자 이상입니다';return}
+  pin=v;stopRetry=false;tries=0;$('perr').textContent='';
+  if(ws)ws.close();     // onclose of a stale socket is ignored once ws changes; reconnect right away
+  ws=null;connect();
+}
+$('pingo').addEventListener('click',pinGo);
+$('pinin').addEventListener('keydown',function(e){if(e.key==='Enter')pinGo()});
+
+/* ---- lifecycle ---- */
+var wl=null;
+function wake(){
+  try{
+    if(cfg.wake&&authed&&navigator.wakeLock&&!wl){
+      navigator.wakeLock.request('screen').then(function(l){wl=l;l.addEventListener('release',function(){wl=null})},function(){});
+    }else if(!cfg.wake&&wl){wl.release();wl=null}
+  }catch(e){wl=null}
+}
+window.addEventListener('pagehide',release);
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden)release();
+  else{wake();if(!ws&&pin&&!stopRetry){tries=0;connect()}}
+});
+// keep the layout above the soft keyboard (iOS does not resize the layout viewport)
+var vv=window.visualViewport;
+if(vv){
+  var app=$('app');
+  var fit=function(){app.style.height=vv.height+'px';app.style.transform='translateY('+vv.offsetTop+'px)'};
+  vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);fit();
+}
+
+setStatus('','연결 안 됨');
+connect();
+})();
+</script>
+</body>
+</html>

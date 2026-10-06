@@ -477,14 +477,38 @@ Double click on a screen to edit its settings.</string>
            </widget>
           </item>
           <item row="1" column="0">
-           <widget class="QCheckBox" name="m_pCheckBoxRelativeMouseMoves">
-            <property name="enabled">
-             <bool>true</bool>
-            </property>
-            <property name="text">
-             <string>Use &amp;relative mouse moves</string>
-            </property>
-           </widget>
+           <layout class="QVBoxLayout" name="verticalLayoutGameMode">
+            <item>
+             <widget class="QCheckBox" name="m_pCheckBoxRelativeMouseMoves">
+              <property name="enabled">
+               <bool>true</bool>
+              </property>
+              <property name="text">
+               <string>Use &amp;relative mouse moves</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="m_pCheckBoxGameMode">
+              <property name="text">
+               <string>게임 모드 (실험)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="m_pLabelGameMode">
+              <property name="text">
+               <string>켜면 상대 마우스 이동을 쓰고, Ctrl+Shift+G 로 커서를 현재 화면에 고정/해제할 수 있습니다. 서버를 다시 시작해야 적용됩니다.</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+              <property name="indent">
+               <number>20</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item row="2" column="0">
            <widget class="QCheckBox" name="m_pCheckBoxScreenSaverSync">

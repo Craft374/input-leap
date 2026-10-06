@@ -23,6 +23,8 @@
 #include "AppLocale.h"
 #include "QUtility.h"
 #include "AppConfig.h"
+#include "PeerLink.h"
+#include "PhoneServer.h"
 #if defined(Q_OS_MAC)
 #include "MacInputDevice.h"
 #endif
@@ -60,6 +62,14 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
     ui_->m_pCheckBoxMinimizeToTray->setChecked(app_config_.getMinimizeToTray());
     ui_->m_pCheckBoxEnableCrypto->setChecked(app_config_.getCryptoEnabled());
     ui_->checkbox_require_client_certificate->setChecked(app_config_.getRequireClientCertificate());
+
+    ui_->m_pCheckBoxPhoneEnabled->setChecked(app_config_.phoneEnabled());
+    ui_->m_pSpinBoxPhonePort->setValue(app_config_.phonePort());
+    ui_->m_pLineEditPhonePin->setText(app_config_.phonePin());
+    ui_->m_pCheckBoxPeerEnabled->setChecked(app_config_.peerLinkEnabled());
+    ui_->m_pSpinBoxPeerPort->setValue(app_config_.peerLinkPort());
+    ui_->m_pLineEditPeerCode->setText(app_config_.peerPairingCode());
+    ui_->m_pLineEditPeerAddress->setText(app_config_.peerAddress());
 
 #if defined(Q_OS_MAC)
     const QStringList selectedDeviceIds = app_config_.macLocalInputDevice().split(
@@ -99,12 +109,45 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
     connect(ui_->m_pCheckBoxLogToFile, &QCheckBox::stateChanged, this,
             [this](int state) { logToFileChanged(state == 2); });
 #endif
+    auto refreshPhoneUrls = [this]() {
+        const bool on = ui_->m_pCheckBoxPhoneEnabled->isChecked();
+        ui_->m_pLabelPhoneUrlsTitle->setVisible(on);
+        ui_->m_pLabelPhoneUrls->setVisible(on);
+        ui_->m_pLabelPhoneUrls->setText(
+            PhoneServer::localUrls(static_cast<quint16>(ui_->m_pSpinBoxPhonePort->value())).join(QLatin1Char('\n')));
+    };
+    refreshPhoneUrls();
+    connect(ui_->m_pCheckBoxPhoneEnabled, &QCheckBox::toggled, this, refreshPhoneUrls);
+    connect(ui_->m_pSpinBoxPhonePort, QOverload<int>::of(&QSpinBox::valueChanged), this, refreshPhoneUrls);
+    connect(ui_->m_pCheckBoxPeerEnabled, &QCheckBox::toggled, this, [this](bool on) {
+        if (on && ui_->m_pLineEditPeerCode->text().trimmed().isEmpty()) {
+            ui_->m_pLineEditPeerCode->setText(peerlink::generatePairingCode());
+        }
+    });
+    connect(ui_->m_pButtonPeerNewCode, &QPushButton::clicked, this, [this]() {
+        ui_->m_pLineEditPeerCode->setText(peerlink::generatePairingCode());
+    });
     connect(ui_->m_pButtonBrowseLog, &QPushButton::clicked, this, &SettingsDialog::browseLogClicked);
     connect(ui_->m_pComboLanguage, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsDialog::languageChanged);
 }
 
 void SettingsDialog::accept()
 {
+    // validate everything before writing anything to AppConfig
+    const QString phonePin = ui_->m_pLineEditPhonePin->text().trimmed();
+    const bool phonePinOk = phonePin.size() >= 4 && phonePin.size() <= 16;
+    if (ui_->m_pCheckBoxPhoneEnabled->isChecked() && !phonePinOk) {
+        QMessageBox::warning(this, tr("설정"), tr("휴대폰 트랙패드 PIN은 4~16자여야 합니다."));
+        return;
+    }
+    const QString peerCode = ui_->m_pLineEditPeerCode->text().trimmed();
+    const bool peerCodeOk = peerlink::isValidPairingCode(peerCode);
+    if (ui_->m_pCheckBoxPeerEnabled->isChecked() && !peerCodeOk) {
+        QMessageBox::warning(this, tr("설정"),
+            tr("페어링 코드는 8자 이상이어야 합니다. '새 코드 만들기'를 눌러 주세요."));
+        return;
+    }
+
     app_config_.setScreenName(ui_->m_pLineEditScreenName->text());
     app_config_.setPort(ui_->m_pSpinBoxPort->value());
     app_config_.setNetworkInterface(ui_->m_pLineEditInterface->text());
@@ -118,6 +161,13 @@ void SettingsDialog::accept()
     app_config_.setAutoHide(ui_->m_pCheckBoxAutoHide->isChecked());
     app_config_.setAutoStart(ui_->m_pCheckBoxAutoStart->isChecked());
     app_config_.setMinimizeToTray(ui_->m_pCheckBoxMinimizeToTray->isChecked());
+    app_config_.setPhoneEnabled(ui_->m_pCheckBoxPhoneEnabled->isChecked());
+    app_config_.setPhonePort(ui_->m_pSpinBoxPhonePort->value());
+    if (phonePinOk) app_config_.setPhonePin(phonePin);
+    app_config_.setPeerLinkEnabled(ui_->m_pCheckBoxPeerEnabled->isChecked());
+    app_config_.setPeerLinkPort(ui_->m_pSpinBoxPeerPort->value());
+    if (peerCodeOk) app_config_.setPeerPairingCode(peerCode);
+    app_config_.setPeerAddress(ui_->m_pLineEditPeerAddress->text().trimmed());
 #if defined(Q_OS_MAC)
     QStringList selectedDeviceIds;
     for (int i = 0; i < ui_->m_pListLocalInputDevices->count(); ++i) {

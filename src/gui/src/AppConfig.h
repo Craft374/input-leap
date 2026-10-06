@@ -106,6 +106,22 @@ class AppConfig: public QObject
         const QString& macLocalInputDevice() const;
         void setMacLocalInputDevice(const QString& device);
 
+        bool phoneEnabled() const;
+        void setPhoneEnabled(bool enabled);
+        int phonePort() const;
+        void setPhonePort(int port);
+        QString phonePin();    // generates 6 random digits when empty
+        void setPhonePin(const QString& pin);
+
+        bool peerLinkEnabled() const;
+        void setPeerLinkEnabled(bool enabled);
+        int peerLinkPort() const;
+        void setPeerLinkPort(int port);
+        const QString& peerPairingCode() const;
+        void setPeerPairingCode(const QString& code);
+        const QString& peerAddress() const;
+        void setPeerAddress(const QString& address);
+
         void saveSettings();
 
 protected:
@@ -144,6 +160,13 @@ protected:
         bool m_MinimizeToTray;
         bool m_MacMapFunctionKeys;
         QString m_MacLocalInputDevice;
+        bool m_PhoneEnabled = false;
+        int m_PhonePort = 24803;
+        QString m_PhonePin;
+        bool m_PeerLinkEnabled = false;
+        int m_PeerLinkPort = 24802;
+        QString m_PeerPairingCode;
+        QString m_PeerAddress;
 
         static const char server_name_[];
         static const char client_name_[];

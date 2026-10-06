@@ -341,6 +341,16 @@
        </spacer>
       </item>
       <item>
+       <widget class="QPushButton" name="m_pButtonSwapRole">
+        <property name="toolTip">
+         <string>상대 PC와 서버/클라이언트 역할을 서로 바꿉니다. 설정 창에서 'PC 간 역할 교환'을 켜고 양쪽에 같은 코드를 입력해야 합니다.</string>
+        </property>
+        <property name="text">
+         <string>역할 교환</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="m_pButtonQuit">
         <property name="text">
          <string>&amp;Quit</string>
@@ -377,6 +387,14 @@
    </property>
    <property name="menuRole">
     <enum>QAction::AboutRole</enum>
+   </property>
+  </action>
+  <action name="m_pActionSwapRole">
+   <property name="text">
+    <string>역할 교환</string>
+   </property>
+   <property name="toolTip">
+    <string>상대 PC와 서버/클라이언트 역할을 서로 바꿉니다.</string>
    </property>
   </action>
   <action name="m_pActionQuit">

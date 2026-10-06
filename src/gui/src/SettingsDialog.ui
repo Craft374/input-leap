@@ -167,6 +167,160 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="m_pGroupPhone">
+     <property name="title">
+      <string>휴대폰 트랙패드</string>
+     </property>
+     <layout class="QFormLayout" name="phoneLayout">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="m_pCheckBoxPhoneEnabled">
+        <property name="text">
+         <string>사용</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="m_pLabelPhonePort">
+        <property name="text">
+         <string>포트:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="m_pSpinBoxPhonePort">
+        <property name="minimum">
+         <number>1024</number>
+        </property>
+        <property name="maximum">
+         <number>65535</number>
+        </property>
+        <property name="value">
+         <number>24803</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="m_pLabelPhonePin">
+        <property name="text">
+         <string>PIN (4~16자):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="m_pLineEditPhonePin">
+        <property name="maxLength">
+         <number>16</number>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="m_pLabelPhoneUrlsTitle">
+        <property name="text">
+         <string>이 PC에서 접속할 주소:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLabel" name="m_pLabelPhoneUrls">
+        <property name="text">
+         <string></string>
+        </property>
+        <property name="textInteractionFlags">
+         <set>Qt::TextSelectableByMouse</set>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QLabel" name="m_pLabelPhoneHint">
+        <property name="text">
+         <string>휴대폰과 같은 와이파이에서 위 주소를 열고 PIN을 입력하세요. 서버 역할인 PC의 주소로 접속해야 반대편 PC까지 조작됩니다.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="m_pGroupPeer">
+     <property name="title">
+      <string>PC 간 역할 교환</string>
+     </property>
+     <layout class="QFormLayout" name="peerLayout">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="m_pCheckBoxPeerEnabled">
+        <property name="text">
+         <string>사용</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="m_pLabelPeerPort">
+        <property name="text">
+         <string>포트:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="m_pSpinBoxPeerPort">
+        <property name="minimum">
+         <number>1024</number>
+        </property>
+        <property name="maximum">
+         <number>65535</number>
+        </property>
+        <property name="value">
+         <number>24802</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="m_pLabelPeerCode">
+        <property name="text">
+         <string>페어링 코드:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <layout class="QHBoxLayout" name="peerCodeLayout">
+        <item>
+         <widget class="QLineEdit" name="m_pLineEditPeerCode"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="m_pButtonPeerNewCode">
+          <property name="text">
+           <string>새 코드 만들기</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="m_pLabelPeerAddress">
+        <property name="text">
+         <string>상대 PC 주소:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLineEdit" name="m_pLineEditPeerAddress"/>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QLabel" name="m_pLabelPeerHint">
+        <property name="text">
+         <string>두 PC 모두 같은 코드(8자 이상)를 입력해야 합니다. 상대 PC 주소는 처음 한 번만 입력하면 됩니다. 이후엔 자동으로 기억합니다.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="m_pGroupNetworking">
      <property name="title">
       <string>Networking</string>

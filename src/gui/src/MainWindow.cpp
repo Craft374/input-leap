@@ -26,6 +26,7 @@
 #include "SettingsDialog.h"
 #include "ZeroconfService.h"
 #include "FingerprintAcceptDialog.h"
+#include "PhoneServer.h"
 #include "QUtility.h"
 #include "SslCertificate.h"
 #include "base/String.h"
@@ -36,6 +37,7 @@
 #include <QtCore>
 #include <QtGui>
 #include <QtNetwork>
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QMenu>
 #include <QMenuBar>
@@ -371,6 +373,14 @@ MainWindow::MainWindow(QSettings& settings, AppConfig& appConfig) :
     setAttribute(Qt::WA_X11NetWmWindowTypeDialog, true);
 
     ui_->setupUi(this);
+    m_pPhoneServer = new PhoneServer(this);
+    m_pPhoneServer->setInfoProvider([this]() {
+        return QJsonObject{
+            {QStringLiteral("name"), getScreenName()},
+            {QStringLiteral("role"), app_role() == AppRole::Server ? QStringLiteral("server") : QStringLiteral("client")}};
+    });
+    m_pPeerLink = new PeerLink(this);
+    m_pPeerLink->setHandler([this](const peerlink::SwapRequest& request) { return handleSwapRequest(request); });
 #if !defined(Q_OS_MAC) && !defined(Q_OS_WIN)
     ui_->m_pButtonQuit->hide();
 #endif
@@ -434,6 +444,9 @@ MainWindow::MainWindow(QSettings& settings, AppConfig& appConfig) :
 
 MainWindow::~MainWindow()
 {
+    m_pPhoneServer->stop();
+    m_pPeerLink->close();
+
     if (appConfig().processMode() == Desktop) {
         m_ExpectedRunningState = kStopped;
         stopDesktop();
@@ -466,6 +479,9 @@ void MainWindow::open()
         promptAutoConfig();
     }
 
+    updatePhoneServer();
+    updatePeerLink();
+
     // only start if user has previously started. this stops the gui from
     // auto hiding before the user has configured InputLeap (which of course
     // confuses first time users, who think InputLeap has crashed).
@@ -489,6 +505,7 @@ void MainWindow::createTrayIcon()
     m_pTrayIconMenu->addAction(ui_->m_pActionStopCmdApp);
     m_pTrayIconMenu->addAction(ui_->m_pActionShowLog);
     m_pTrayIconMenu->addAction(ui_->m_pActionReload);
+    m_pTrayIconMenu->addAction(ui_->m_pActionSwapRole);
     m_pTrayIconMenu->addSeparator();
 
     m_pTrayIconMenu->addAction(ui_->m_pActionMinimize);
@@ -537,6 +554,7 @@ void MainWindow::createMenuBar()
     main_menu_->addAction(ui_->m_pActionShowLog);
     main_menu_->addAction(ui_->m_pActionSettings);
     main_menu_->addAction(ui_->m_pActionMinimize);
+    main_menu_->addAction(ui_->m_pActionSwapRole);
     main_menu_->addSeparator();
 
 #ifndef Q_OS_DARWIN
@@ -577,6 +595,8 @@ void MainWindow::initConnections()
     connect(ui_->m_pActionShowLog, &QAction::triggered, this, &MainWindow::showLogWindow);
     connect(ui_->m_pActionReload, &QAction::triggered, this, &MainWindow::restart_cmd_app);
     connect(ui_->m_pActionQuit, &QAction::triggered, this, &MainWindow::quitApplication);
+    connect(ui_->m_pActionSwapRole, &QAction::triggered, this, &MainWindow::beginSwap);
+    connect(ui_->m_pButtonSwapRole, &QPushButton::clicked, ui_->m_pActionSwapRole, &QAction::trigger);
     connect(ui_->m_pButtonQuit, &QPushButton::clicked, ui_->m_pActionQuit, &QAction::trigger);
 }
 
@@ -586,6 +606,8 @@ void MainWindow::quitApplication()
         return;
     }
     m_ShuttingDown = true;
+    m_pPhoneServer->stop();
+    m_pPeerLink->close();
 
 #if defined(Q_OS_WIN)
     DWORD state = SERVICE_STOPPED;
@@ -751,6 +773,24 @@ void MainWindow::checkConnected(const QString& line)
     }
 }
 
+// Adds a SHA256 fingerprint to the trusted servers (client side) or trusted clients (server side) database.
+static void trustFingerprint(bool trustedServersDb, const inputleap::FingerprintData& fingerprint_sha256)
+{
+    auto db_path = trustedServersDb
+            ? inputleap::DataDirectories::trusted_servers_ssl_fingerprints_path()
+            : inputleap::DataDirectories::trusted_clients_ssl_fingerprints_path();
+
+    auto db_dir = db_path.parent_path();
+    if (!inputleap::fs::exists(db_dir)) {
+        inputleap::fs::create_directories(db_dir);
+    }
+
+    inputleap::FingerprintDatabase db;
+    db.read(db_path);
+    db.add_trusted(fingerprint_sha256);
+    db.write(db_path);
+}
+
 void MainWindow::checkFingerprint(const QString& line)
 {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -813,8 +853,7 @@ void MainWindow::checkFingerprint(const QString& line)
         FingerprintAcceptDialog dialog{this, app_role(), fingerprint_sha1, fingerprint_sha256};
         if (dialog.exec() == QDialog::Accepted) {
             // restart core process after trusting fingerprint.
-            db.add_trusted(fingerprint_sha256);
-            db.write(db_path);
+            trustFingerprint(is_client, fingerprint_sha256);
             if (is_client) {
                 start_cmd_app();
             }
@@ -866,6 +905,12 @@ void MainWindow::start_cmd_app()
 
     if (desktopMode)
     {
+        // never leave an old process behind (e.g. the auto-restart timer racing a role swap); it must
+        // not re-arm that timer while being stopped.
+        const auto expected = m_ExpectedRunningState;
+        m_ExpectedRunningState = kStopped;
+        stopDesktop();
+        m_ExpectedRunningState = expected;
         cmd_app_process_ = new QProcess(this);
     }
     else
@@ -1485,6 +1530,8 @@ void MainWindow::on_m_pActionSettings_triggered()
     connect(dialog.get(), &SettingsDialog::requestLanguageChange, this, &MainWindow::requestLanguageChange);
     if (dialog.get()->exec() == QDialog::Accepted) {
         updateSSLFingerprint();
+        updatePhoneServer();
+        updatePeerLink();
 #if defined(Q_OS_MAC)
         const bool macInputChanged = oldMapMacFunctionKeys != appConfig().getMacMapFunctionKeys() ||
             oldMacLocalInputDevice != appConfig().macLocalInputDevice();
@@ -1497,8 +1544,232 @@ void MainWindow::on_m_pActionSettings_triggered()
     disconnect(dialog.get(), &SettingsDialog::requestLanguageChange, this, &MainWindow::requestLanguageChange);
 }
 
+void MainWindow::updatePhoneServer()
+{
+    m_pPhoneServer->stop();
+    if (!appConfig().phoneEnabled()) {
+        return;
+    }
+    const auto port = static_cast<quint16>(appConfig().phonePort());
+    if (!m_pPhoneServer->start(port, appConfig().phonePin())) {
+        const QString message = tr("휴대폰 트랙패드를 시작하지 못했습니다: %1").arg(m_pPhoneServer->errorString());
+        appendLogError(message);
+        if (m_pTrayIcon) {
+            m_pTrayIcon->showMessage(tr("휴대폰 트랙패드"), message, QSystemTrayIcon::Warning);
+        }
+        return;
+    }
+    appConfig().saveSettings();   // keeps a freshly generated PIN
+    appendLogInfo(tr("휴대폰 트랙패드 주소: %1").arg(PhoneServer::localUrls(port).join(QStringLiteral(", "))));
+}
+
+void MainWindow::updatePeerLink()
+{
+    m_pPeerLink->close();
+    if (!appConfig().peerLinkEnabled() || appConfig().wizardShouldRun()) {
+        return;
+    }
+    if (!m_pPeerLink->listen(static_cast<quint16>(appConfig().peerLinkPort()), appConfig().peerPairingCode())) {
+        appendLogError(tr("역할 교환 연결을 시작하지 못했습니다: %1").arg(m_pPeerLink->errorString()));
+    }
+}
+
+QString MainWindow::swapBlocker() const
+{
+    if (m_SwapInProgress) {
+        return tr("이미 역할 교환이 진행 중입니다.");
+    }
+    if (QApplication::activeModalWidget()) {
+        return tr("열려 있는 대화상자를 먼저 닫아 주세요.");
+    }
+    if (m_AppConfig->wizardShouldRun()) {
+        return tr("초기 설정을 먼저 마쳐 주세요.");
+    }
+    if (app_role() == AppRole::Server && ui_->m_pRadioExternalConfig->isChecked()) {
+        return tr("역할 교환은 '내부 설정'을 쓸 때만 가능합니다.");
+    }
+    return QString();
+}
+
+QString MainWindow::localSha256() const
+{
+    if (!m_AppConfig->getCryptoEnabled()) {
+        return QString();
+    }
+    inputleap::FingerprintDatabase db;
+    db.read(inputleap::DataDirectories::local_ssl_fingerprints_path());
+    for (const auto& fingerprint : db.fingerprints()) {
+        if (fingerprint.algorithm == "sha256") {
+            return QString::fromStdString(inputleap::format_ssl_fingerprint(fingerprint.data));
+        }
+    }
+    return QString();
+}
+
+// Replaces the server layout with the one received from the server. Rolls back when this PC is not in it.
+bool MainWindow::adoptLayout(const QVariantMap& layout, QString* why)
+{
+    if (layout.isEmpty()) {
+        *why = tr("서버의 화면 구성을 받지 못했습니다.");
+        return false;
+    }
+    const QVariantMap old = serverConfig().toVariantMap();
+    if (!serverConfig().fromVariantMap(layout, why)) {
+        return false;
+    }
+    if (!serverConfig().hasScreen(getScreenName())) {
+        serverConfig().fromVariantMap(old);
+        *why = tr("받은 화면 구성에 이 PC('%1')가 없습니다.").arg(getScreenName());
+        return false;
+    }
+    return true;
+}
+
+void MainWindow::beginSwap()
+{
+    const QString title = tr("역할 교환");
+    QString why = swapBlocker();
+    const bool iAmServer = app_role() == AppRole::Server;
+    QString host = appConfig().peerAddress();
+    if (host.isEmpty() && !iAmServer) {
+        host = hostname();
+    }
+    if (why.isEmpty() && !appConfig().peerLinkEnabled()) {
+        why = tr("설정 창에서 'PC 간 역할 교환'을 먼저 켜 주세요.");
+    } else if (why.isEmpty() && !peerlink::isValidPairingCode(appConfig().peerPairingCode())) {
+        why = tr("설정 창에서 페어링 코드(8자 이상)를 먼저 입력해 주세요.");
+    } else if (why.isEmpty() && host.isEmpty()) {
+        why = tr("설정 창에서 상대 PC 주소를 먼저 입력해 주세요.");
+    }
+    if (!why.isEmpty()) {
+        QMessageBox::warning(this, title, why);
+        return;
+    }
+
+    peerlink::SwapRequest request;
+    request.fromName = getScreenName();
+    request.fromRole = iAmServer ? QStringLiteral("server") : QStringLiteral("client");
+    request.fromFingerprint = localSha256();
+    if (iAmServer) {
+        request.layout = serverConfig().toVariantMap();
+    }
+
+    m_SwapInProgress = true;
+    setStatus(tr("상대 PC에 역할 교환 요청 중..."));
+    m_pPeerLink->requestSwap(host, static_cast<quint16>(appConfig().peerLinkPort()), appConfig().peerPairingCode(), request,
+        [this, host, iAmServer, title](const peerlink::SwapReply& reply) {
+            if (m_ShuttingDown) {
+                return;
+            }
+            m_SwapInProgress = false;
+            QString why = reply.why;
+            if (!reply.ok || (!iAmServer && !adoptLayout(reply.layout, &why))) {
+                proofreadInfo();   // restores the status text, except when the state is unchanged
+                if (connection_state() == AppConnectionState::DISCONNECTED) {
+                    setStatus(tr("InputLeafPlus is not running."));
+                } else if (connection_state() == AppConnectionState::TRANSFERRING) {
+                    setStatus(tr("InputLeafPlus is running."));
+                }
+                QMessageBox::warning(this, title, why);
+                return;
+            }
+            const QString address = reply.address.isEmpty() ? host : reply.address;
+            appConfig().setPeerAddress(address);
+            appConfig().saveSettings();
+            applyRole(iAmServer ? AppRole::Client : AppRole::Server, address, reply.fingerprint);
+        });
+}
+
+peerlink::SwapReply MainWindow::handleSwapRequest(const peerlink::SwapRequest& request)
+{
+    peerlink::SwapReply reply;
+    const auto refuse = [&reply](const QString& why) {
+        reply.why = why;
+        return reply;
+    };
+
+    const QString blocker = swapBlocker();
+    if (!blocker.isEmpty()) {
+        return refuse(blocker);
+    }
+    const bool iAmServer = app_role() == AppRole::Server;
+    if (request.fromRole != (iAmServer ? QStringLiteral("client") : QStringLiteral("server"))) {
+        return refuse(tr("두 PC의 역할이 같습니다. 한쪽을 먼저 서버/클라이언트로 맞춰 주세요."));
+    }
+
+    reply.name = getScreenName();
+    reply.fingerprint = localSha256();
+    if (iAmServer) {
+        if (!serverConfig().hasScreen(request.fromName)) {
+            return refuse(tr("서버 화면 구성에 '%1' PC가 없습니다").arg(request.fromName));
+        }
+        if (request.fromAddress.isEmpty()) {
+            return refuse(tr("상대 PC의 IPv4 주소를 알 수 없습니다"));
+        }
+        reply.layout = serverConfig().toVariantMap();
+    } else {
+        QString why;
+        if (!adoptLayout(request.layout, &why)) {
+            return refuse(why);
+        }
+    }
+
+    if (!request.fromAddress.isEmpty()) {
+        appConfig().setPeerAddress(request.fromAddress);
+        appConfig().saveSettings();
+    }
+    // switch after the reply has been flushed; no process start/stop inside the PeerLink handler
+    m_SwapInProgress = true;
+    const AppRole newRole = iAmServer ? AppRole::Client : AppRole::Server;
+    QTimer::singleShot(300, this, [this, newRole, request]() {
+        applyRole(newRole, request.fromAddress, request.fromFingerprint);
+    });
+    reply.ok = true;
+    return reply;
+}
+
+void MainWindow::applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint)
+{
+    m_SwapInProgress = true;
+    const bool toServer = newRole == AppRole::Server;
+
+    // pre-trust the peer so the fingerprint dialog does not show up (the peer is authenticated by the pairing code)
+    if (!peerFingerprint.isEmpty() && appConfig().getCryptoEnabled()) {
+        auto data = inputleap::string::from_hex(peerFingerprint.toStdString());
+        if (data.size() == 32) {
+            trustFingerprint(!toServer, {inputleap::fingerprint_type_to_string(inputleap::FingerprintType::SHA256), data});
+        }
+    }
+
+    if (toServer) {
+        ui_->m_pRadioInternalConfig->setChecked(true);
+    } else {
+        m_SuppressAutoConfigWarning = true;
+        ui_->m_pCheckBoxAutoConfig->setChecked(false);
+        m_SuppressAutoConfigWarning = false;
+        ui_->m_pLineEditHostname->setText(peerHost);
+    }
+    setServerMode(toServer);
+
+    saveSettings();
+    appConfig().saveSettings();
+    serverConfig().saveSettings();
+    restart_cmd_app();
+
+    const QString message = toServer ? tr("역할이 바뀌었습니다: 이제 이 PC는 서버입니다")
+                                     : tr("역할이 바뀌었습니다: 이제 이 PC는 클라이언트입니다");
+    appendLogInfo(message);
+    if (m_pTrayIcon) {
+        m_pTrayIcon->showMessage(tr("역할 교환"), message, QSystemTrayIcon::Information);
+    }
+    m_SwapInProgress = false;
+}
+
 void MainWindow::autoAddScreen(const QString name)
 {
+    if (m_SwapInProgress) {
+        return;
+    }
     if (!m_ServerConfig.ignoreAutoConfigClient()) {
         int r = m_ServerConfig.autoAddScreen(name);
         if (r != kAutoAddScreenOk) {

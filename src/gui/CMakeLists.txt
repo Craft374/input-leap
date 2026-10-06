@@ -19,12 +19,18 @@ set(GUI_COMMON_SOURCE_FILES
     src/Action.cpp
     src/Hotkey.cpp
     src/KeySequence.cpp
+    src/PeerLink.cpp
+    src/PhoneKeys.cpp
+    src/PhoneProtocol.cpp
 )
 
 set(GUI_COMMON_HEADER_FILES
     src/Action.h
     src/Hotkey.h
     src/KeySequence.h
+    src/PeerLink.h
+    src/PhoneKeys.h
+    src/PhoneProtocol.h
 )
 
 set(GUI_SOURCE_FILES
@@ -46,6 +52,8 @@ set(GUI_SOURCE_FILES
     src/main.cpp
     src/MainWindow.cpp
     src/NewScreenWidget.cpp
+    src/PhoneInject.cpp
+    src/PhoneServer.cpp
     src/QInputLeapApplication.cpp
     src/QUtility.cpp
     src/Screen.cpp
@@ -84,6 +92,8 @@ set(GUI_HEADER_FILES
     src/LogWindow.h
     src/MainWindow.h
     src/NewScreenWidget.h
+    src/PhoneInject.h
+    src/PhoneServer.h
     src/ProcessorArch.h
     src/QInputLeapApplication.h
     src/QUtility.h
@@ -226,6 +236,9 @@ if (BUILD_MSWINDOWS)
     set_target_properties (input-leap PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT")
     target_link_libraries (input-leap ${DNSSD_LIB})
 endif()
+if (WIN32)
+    target_link_libraries(input-leap user32)
+endif()
 if (BUILD_CARBON)
     find_library(APPSERVICES_LIB ApplicationServices)
     find_library(IOKIT_LIB IOKit)
@@ -266,6 +279,9 @@ if(INPUTLEAP_BUILD_TESTS)
     set(GUI_TEST_SOURCE_FILES
         test/KeySequenceTests.cpp
         test/HotkeyTests.cpp
+        test/PeerLinkTests.cpp
+        test/PhoneKeysTests.cpp
+        test/PhoneProtocolTests.cpp
         test/main.cpp
     )
 

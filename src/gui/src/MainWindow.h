@@ -34,6 +34,7 @@
 #include "IpcClient.h"
 #include "Ipc.h"
 #include "LogWindow.h"
+#include "PeerLink.h"
 
 #include <QMutex>
 #include <memory>
@@ -57,6 +58,7 @@ class QInputLeapApplication;
 class SetupWizard;
 class ZeroconfService;
 class SslCertificate;
+class PhoneServer;
 
 namespace Ui
 {
@@ -162,6 +164,14 @@ public slots:
         void proofreadInfo();
         void windowStateChanged();
         void updateSSLFingerprint();
+        void updatePhoneServer();
+        void updatePeerLink();
+        void beginSwap();
+        peerlink::SwapReply handleSwapRequest(const peerlink::SwapRequest& request);
+        void applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint);
+        bool adoptLayout(const QVariantMap& layout, QString* why);
+        QString swapBlocker() const;
+        QString localSha256() const;
 
     private:
         std::unique_ptr<Ui::MainWindow> ui_;
@@ -188,6 +198,9 @@ public slots:
         QStringList m_PendingClientNames;
         LogWindow *m_pLogWindow;
         bool m_ShuttingDown = false;
+        PhoneServer* m_pPhoneServer = nullptr;   // owned through QObject parent
+        PeerLink* m_pPeerLink = nullptr;         // owned through QObject parent
+        bool m_SwapInProgress = false;
 
         bool m_fingerprint_expanded = false;
 

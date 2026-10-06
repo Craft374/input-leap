@@ -166,6 +166,13 @@ void AppConfig::loadSettings()
     m_MinimizeToTray = settings().value("minimizeToTray", false).toBool();
     m_MacMapFunctionKeys = settings().value("macMapFunctionKeys", true).toBool();
     m_MacLocalInputDevice = settings().value("macLocalInputDevice").toString();
+    m_PhoneEnabled = settings().value("phoneEnabled", false).toBool();
+    m_PhonePort = settings().value("phonePort", 24803).toInt();
+    m_PhonePin = settings().value("phonePin").toString();
+    m_PeerLinkEnabled = settings().value("peerLinkEnabled", false).toBool();
+    m_PeerLinkPort = settings().value("peerLinkPort", 24802).toInt();
+    m_PeerPairingCode = settings().value("peerPairingCode").toString();
+    m_PeerAddress = settings().value("peerAddress").toString();
 }
 
 void AppConfig::saveSettings()
@@ -192,6 +199,13 @@ void AppConfig::saveSettings()
     settings().setValue("minimizeToTray", m_MinimizeToTray);
     settings().setValue("macMapFunctionKeys", m_MacMapFunctionKeys);
     settings().setValue("macLocalInputDevice", m_MacLocalInputDevice);
+    settings().setValue("phoneEnabled", m_PhoneEnabled);
+    settings().setValue("phonePort", m_PhonePort);
+    settings().setValue("phonePin", m_PhonePin);
+    settings().setValue("peerLinkEnabled", m_PeerLinkEnabled);
+    settings().setValue("peerLinkPort", m_PeerLinkPort);
+    settings().setValue("peerPairingCode", m_PeerPairingCode);
+    settings().setValue("peerAddress", m_PeerAddress);
     settings().sync();
 }
 
@@ -256,3 +270,37 @@ void AppConfig::setMacMapFunctionKeys(bool enabled) { m_MacMapFunctionKeys = ena
 const QString& AppConfig::macLocalInputDevice() const { return m_MacLocalInputDevice; }
 
 void AppConfig::setMacLocalInputDevice(const QString& device) { m_MacLocalInputDevice = device; }
+
+bool AppConfig::phoneEnabled() const { return m_PhoneEnabled; }
+
+void AppConfig::setPhoneEnabled(bool enabled) { m_PhoneEnabled = enabled; }
+
+int AppConfig::phonePort() const { return m_PhonePort; }
+
+void AppConfig::setPhonePort(int port) { m_PhonePort = port; }
+
+QString AppConfig::phonePin()
+{
+    if (m_PhonePin.isEmpty()) {
+        m_PhonePin = QString::number(QRandomGenerator::system()->bounded(100000, 1000000));
+    }
+    return m_PhonePin;
+}
+
+void AppConfig::setPhonePin(const QString& pin) { m_PhonePin = pin; }
+
+bool AppConfig::peerLinkEnabled() const { return m_PeerLinkEnabled; }
+
+void AppConfig::setPeerLinkEnabled(bool enabled) { m_PeerLinkEnabled = enabled; }
+
+int AppConfig::peerLinkPort() const { return m_PeerLinkPort; }
+
+void AppConfig::setPeerLinkPort(int port) { m_PeerLinkPort = port; }
+
+const QString& AppConfig::peerPairingCode() const { return m_PeerPairingCode; }
+
+void AppConfig::setPeerPairingCode(const QString& code) { m_PeerPairingCode = code; }
+
+const QString& AppConfig::peerAddress() const { return m_PeerAddress; }
+
+void AppConfig::setPeerAddress(const QString& address) { m_PeerAddress = address; }
