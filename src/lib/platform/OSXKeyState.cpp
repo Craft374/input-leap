@@ -816,29 +816,35 @@ void OSXKeyState::handleModifierKeys(const EventTarget* target, std::uint32_t vi
     // compute changed modifiers
     KeyModifierMask changed = (oldMask ^ newMask);
 
+    // a malformed (e.g. synthetic) flagsChanged can carry an unmapped keycode
+    const auto vk = m_virtualKeyMap.find(virtualKey);
+    if (vk == m_virtualKeyMap.end()) {
+        return;
+    }
+
     // synthesize changed modifier keys
     if ((changed & KeyModifierShift) != 0) {
-        handleModifierKey(target, virtualKey, m_virtualKeyMap.find(virtualKey)->second,
+        handleModifierKey(target, virtualKey, vk->second,
                             (newMask & KeyModifierShift) != 0, newMask);
     }
     if ((changed & KeyModifierControl) != 0) {
-        handleModifierKey(target, virtualKey, m_virtualKeyMap.find(virtualKey)->second,
+        handleModifierKey(target, virtualKey, vk->second,
                             (newMask & KeyModifierControl) != 0, newMask);
     }
     if ((changed & KeyModifierAlt) != 0) {
-        handleModifierKey(target, virtualKey, m_virtualKeyMap.find(virtualKey)->second,
+        handleModifierKey(target, virtualKey, vk->second,
                             (newMask & KeyModifierAlt) != 0, newMask);
     }
     if ((changed & KeyModifierSuper) != 0) {
-        handleModifierKey(target, virtualKey, m_virtualKeyMap.find(virtualKey)->second,
+        handleModifierKey(target, virtualKey, vk->second,
                             (newMask & KeyModifierSuper) != 0, newMask);
     }
     if ((changed & KeyModifierCapsLock) != 0) {
-        handleModifierKey(target, virtualKey, m_virtualKeyMap.find(virtualKey)->second,
+        handleModifierKey(target, virtualKey, vk->second,
                             (newMask & KeyModifierCapsLock) != 0, newMask);
     }
     if ((changed & KeyModifierNumLock) != 0) {
-        handleModifierKey(target, virtualKey, m_virtualKeyMap.find(virtualKey)->second,
+        handleModifierKey(target, virtualKey, vk->second,
                             (newMask & KeyModifierNumLock) != 0, newMask);
     }
 }

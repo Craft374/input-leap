@@ -30,6 +30,7 @@
 #include "platform/OSXPasteboardPeeker.h"
 #include "inputleap/Clipboard.h"
 #include "inputleap/KeyMap.h"
+#include "inputleap/PhoneInputMarker.h"
 #include "inputleap/ClientApp.h"
 #include "mt/Thread.h"
 #include "arch/XArch.h"
@@ -2258,6 +2259,30 @@ OSXScreen::handleCGInputEvent(CGEventTapProxy proxy,
 		case kCGEventRightMouseDragged:
 		case kCGEventOtherMouseDragged:
 		case kCGEventMouseMoved:
+			// moves injected by the phone trackpad while the cursor is on a
+			// remote screen carry their own deltas: use those, no warp.
+			// (whole pixels, so no fractional accumulator is needed)
+			if (!screen->m_isOnScreen &&
+				CGEventGetIntegerValueField(event, kCGEventSourceUserData) == kPhoneInjectMarker) {
+				const auto dx = static_cast<std::int32_t>(CGEventGetIntegerValueField(event, kCGMouseEventDeltaX));
+				const auto dy = static_cast<std::int32_t>(CGEventGetIntegerValueField(event, kCGMouseEventDeltaY));
+				if (dx != 0 || dy != 0) {
+					screen->sendEvent(EventType::PRIMARY_SCREEN_MOTION_ON_SECONDARY,
+									  create_event_data<MotionInfo>(MotionInfo{dx, dy}));
+				}
+				return nullptr;
+			}
+			if (CGEventGetIntegerValueField(event, kCGEventSourceUserData) == kPhoneInjectMarker) {
+				// tail of a phone move after switching back: its location is stale, rebuild it from the live cursor
+				CGEventRef live = CGEventCreate(nullptr);
+				if (live != nullptr) {
+					const CGPoint cur = CGEventGetLocation(live);
+					CFRelease(live);
+					CGEventSetLocation(event, CGPointMake(
+						cur.x + CGEventGetIntegerValueField(event, kCGMouseEventDeltaX),
+						cur.y + CGEventGetIntegerValueField(event, kCGMouseEventDeltaY)));
+				}
+			}
 			pos = CGEventGetLocation(event);
 			LOG_DEBUG2("mouse event t=%lluus pos %.1f,%.1f delta %+.1f,%+.1f",
 				static_cast<unsigned long long>(cgEventTimestampNanoseconds(event) / 1000),
