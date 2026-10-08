@@ -590,9 +590,11 @@ void MainWindow::initConnections()
     connect(ui_->m_pActionMinimize, &QAction::triggered, this, &MainWindow::hide);
     connect(ui_->m_pComboServerList, &QComboBox::currentTextChanged, this, &MainWindow::comboServerList_currentIndexChanged);
     connect(ui_->m_pActionRestore, &QAction::triggered, this, &MainWindow::showNormal);
+    connect(ui_->m_pActionStartCmdApp, &QAction::triggered, this, &MainWindow::refreshNetwork);
     connect(ui_->m_pActionStartCmdApp, &QAction::triggered, this, &MainWindow::start_cmd_app);
     connect(ui_->m_pActionStopCmdApp, &QAction::triggered, this, &MainWindow::stop_cmd_app);
     connect(ui_->m_pActionShowLog, &QAction::triggered, this, &MainWindow::showLogWindow);
+    connect(ui_->m_pActionReload, &QAction::triggered, this, &MainWindow::refreshNetwork);
     connect(ui_->m_pActionReload, &QAction::triggered, this, &MainWindow::restart_cmd_app);
     connect(ui_->m_pActionQuit, &QAction::triggered, this, &MainWindow::quitApplication);
     connect(ui_->m_pActionSwapRole, &QAction::triggered, this, &MainWindow::beginSwap);
@@ -1037,6 +1039,10 @@ bool MainWindow::clientArgs(QStringList& args, QString& app)
             args << "[" + serverIp + "]:" + QString::number(appConfig().port());
             return true;
         }
+        // nothing announced yet: the first server found restarts the client (comboServerList_currentIndexChanged)
+        appendLogInfo(tr("서버를 검색하는 중입니다. 오래 걸리면 'Auto config'를 끄고 서버 IP를 직접 입력하세요."));
+        QTimer::singleShot(0, this, [this]() { setStatus(tr("서버를 검색하는 중...")); });
+        return false;
     } else if (ui_->m_pLineEditHostname->text().isEmpty()) {
         show();
         if (!m_SuppressEmptyServerWarning) {
@@ -1413,6 +1419,7 @@ void MainWindow::updateZeroconfService()
 
 void MainWindow::serverDetected(const QString name)
 {
+    m_PeerIpHint = name;
     if (ui_->m_pComboServerList->findText(name) == -1) {
         // Note: the first added item triggers startInputLeap
         ui_->m_pComboServerList->addItem(name);
@@ -1625,20 +1632,39 @@ bool MainWindow::adoptLayout(const QVariantMap& layout, QString* why)
     return true;
 }
 
+// "192.168.0.5:24800", "[192.168.0.5]" and stray spaces all become a plain host
+static QString cleanHost(QString host)
+{
+    host = host.trimmed();
+    if (host.startsWith(QLatin1Char('['))) {
+        const int end = host.indexOf(QLatin1Char(']'));
+        if (end > 0) {
+            host = host.mid(1, end - 1);
+        }
+    } else if (host.count(QLatin1Char(':')) == 1) {
+        host = host.section(QLatin1Char(':'), 0, 0);
+    }
+    return host.trimmed();
+}
+
 void MainWindow::beginSwap()
 {
     const QString title = tr("역할 교환");
     QString why = swapBlocker();
     const bool iAmServer = app_role() == AppRole::Server;
-    QString host = appConfig().peerAddress();
-    if (host.isEmpty() && !iAmServer) {
-        host = hostname();
+    // the freshly announced address first (a remembered one goes stale when the wifi changes)
+    QStringList hosts;
+    for (const QString& candidate : {m_PeerIpHint, appConfig().peerAddress(), iAmServer ? QString() : hostname()}) {
+        const QString host = cleanHost(candidate);
+        if (!host.isEmpty() && !hosts.contains(host)) {
+            hosts << host;
+        }
     }
     if (why.isEmpty() && !appConfig().peerLinkEnabled()) {
         why = tr("설정 창에서 'PC 간 역할 교환'을 먼저 켜 주세요.");
     } else if (why.isEmpty() && !peerlink::isValidPairingCode(appConfig().peerPairingCode())) {
         why = tr("설정 창에서 페어링 코드(8자 이상)를 먼저 입력해 주세요.");
-    } else if (why.isEmpty() && host.isEmpty()) {
+    } else if (why.isEmpty() && hosts.isEmpty()) {
         why = tr("설정 창에서 상대 PC 주소를 먼저 입력해 주세요.");
     }
     if (!why.isEmpty()) {
@@ -1656,13 +1682,30 @@ void MainWindow::beginSwap()
 
     m_SwapInProgress = true;
     setStatus(tr("상대 PC에 역할 교환 요청 중..."));
+    requestSwapTo(hosts, 0, request, iAmServer);
+}
+
+// Tries hosts[index]; when that PC cannot be reached at all, moves on to the next address.
+void MainWindow::requestSwapTo(const QStringList& hosts, int index, const peerlink::SwapRequest& request, bool iAmServer)
+{
+    const QString title = tr("역할 교환");
+    const QString host = hosts.at(index);
     m_pPeerLink->requestSwap(host, static_cast<quint16>(appConfig().peerLinkPort()), appConfig().peerPairingCode(), request,
-        [this, host, iAmServer, title](const peerlink::SwapReply& reply) {
+        [this, hosts, index, request, host, iAmServer, title](const peerlink::SwapReply& reply) {
             if (m_ShuttingDown) {
+                return;
+            }
+            if (!reply.ok && reply.unreachable && index + 1 < hosts.size()) {
+                requestSwapTo(hosts, index + 1, request, iAmServer);
                 return;
             }
             m_SwapInProgress = false;
             QString why = reply.why;
+            if (!reply.ok && reply.unreachable) {
+                why += tr("\n\n시도한 주소: %1\n상대 PC 메인 화면의 'IP 주소'를 설정 창의 '상대 PC 주소'에 입력해 주세요. "
+                          "두 PC는 같은 와이파이/네트워크에 있어야 하고, 상대 PC에서도 '역할 교환'이 켜져 있어야 합니다.")
+                           .arg(hosts.join(QStringLiteral(", ")));
+            }
             if (!reply.ok || (!iAmServer && !adoptLayout(reply.layout, &why))) {
                 proofreadInfo();   // restores the status text, except when the state is unchanged
                 if (connection_state() == AppConnectionState::DISCONNECTED) {
@@ -1678,6 +1721,19 @@ void MainWindow::beginSwap()
             appConfig().saveSettings();
             applyRole(iAmServer ? AppRole::Client : AppRole::Server, address, reply.fingerprint);
         });
+}
+
+// The PC may have joined another wifi since the app started: re-read our addresses and
+// re-announce/re-browse over Bonjour so both sides learn the new ones.
+void MainWindow::refreshNetwork()
+{
+    ui_->m_pLabelIpAddresses->setText(getIPAddresses());
+    m_PeerIpHint.clear();
+    if (app_role() == AppRole::Client && ui_->m_pCheckBoxAutoConfig->isChecked()) {
+        ui_->m_pComboServerList->clear();   // addresses found on the old network
+        ui_->m_pComboServerList->hide();
+    }
+    updateZeroconfService();
 }
 
 peerlink::SwapReply MainWindow::handleSwapRequest(const peerlink::SwapRequest& request)

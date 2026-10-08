@@ -84,3 +84,59 @@ void ZeroconfBrowser::browseReply(DNSServiceRef, DNSServiceFlags flags,
         }
     }
 }
+
+ZeroconfResolver::ZeroconfResolver(QObject* parent) :
+    QObject(parent),
+    m_DnsServiceRef(nullptr),
+    m_Done(false)
+{
+}
+
+ZeroconfResolver::~ZeroconfResolver()
+{
+    if (m_DnsServiceRef) {
+        DNSServiceRefDeallocate(m_DnsServiceRef);
+        m_DnsServiceRef = nullptr;
+    }
+}
+
+void ZeroconfResolver::resolve(const ZeroconfRecord& record)
+{
+    DNSServiceErrorType err = DNSServiceResolve(&m_DnsServiceRef, 0, 0,
+        record.serviceName.toUtf8().constData(), record.registeredType.toUtf8().constData(),
+        record.replyDomain.toUtf8().constData(), resolveReply, this);
+
+    int sockFD = err == kDNSServiceErr_NoError ? DNSServiceRefSockFD(m_DnsServiceRef) : -1;
+    if (sockFD == -1) {
+        Q_EMIT error(err != kDNSServiceErr_NoError ? err : kDNSServiceErr_Invalid);
+        return;
+    }
+    socket_ = std::make_unique<QSocketNotifier>(sockFD, QSocketNotifier::Read, this);
+    connect(socket_.get(), &QSocketNotifier::activated, this, &ZeroconfResolver::socketReadyRead);
+}
+
+void ZeroconfResolver::socketReadyRead()
+{
+    DNSServiceErrorType err = DNSServiceProcessResult(m_DnsServiceRef);
+    if (err != kDNSServiceErr_NoError) {
+        Q_EMIT error(err);
+    }
+}
+
+void ZeroconfResolver::resolveReply(DNSServiceRef, DNSServiceFlags, quint32,
+            DNSServiceErrorType errorCode, const char*, const char* hostTarget,
+            quint16, quint16 txtLen, const unsigned char* txtRecord, void* context)
+{
+    ZeroconfResolver* resolver = static_cast<ZeroconfResolver*>(context);
+    if (resolver->m_Done) {
+        return;   // the same service answers once per network interface
+    }
+    resolver->m_Done = true;
+    if (errorCode != kDNSServiceErr_NoError) {
+        Q_EMIT resolver->error(errorCode);
+    }
+    else {
+        Q_EMIT resolver->resolved(QString::fromUtf8(hostTarget),
+            QByteArray(reinterpret_cast<const char*>(txtRecord), txtLen));
+    }
+}

@@ -61,7 +61,7 @@ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;backgrou
 <div id="app">
  <div id="bar"><span id="dot"></span><span id="st">연결 안 됨</span></div>
  <div id="warn">이 PC는 InputLeap 클라이언트입니다. 휴대폰 입력은 이 PC에만 적용됩니다. 마우스·키보드를 공유하는 서버 PC 주소로 다시 접속하세요.</div>
- <div id="pad"><span id="padhint">한 손가락: 이동 / 탭: 클릭<br>두 손가락 탭: 우클릭 / 두 손가락 드래그: 스크롤<br>길게 누른 뒤 드래그: 끌기</span></div>
+ <div id="pad"><span id="padhint">한 손가락: 이동 / 탭: 클릭<br>두 손가락 탭: 우클릭 / 두 손가락 드래그: 스크롤<br>두 손가락 오므리기·펼치기: 축소·확대 / 세 손가락 스와이프: 화면 전환<br>길게 누른 뒤 드래그: 끌기</span></div>
  <div id="kb">
   <div class="row"><input id="txt" type="text" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="입력할 내용"><button class="b" id="send">전송</button><button class="b" id="dir">직접 입력</button></div>
   <div class="hint" id="dirhint" style="display:none">직접 입력: 글자(단어)가 확정되면 바로 전송됩니다.</div>
@@ -192,6 +192,16 @@ function release(){send({t:'rel'});resetLocal()}
 var pad=$('pad'),g={mode:'idle'},mvX=0,mvY=0,scX=0,scY=0,remX=0,remY=0,sRX=0,sRY=0;
 function cen(ts){var x=0,y=0;for(var i=0;i<ts.length;i++){x+=ts[i].clientX;y+=ts[i].clientY}return{x:x/ts.length,y:y/ts.length}}
 function clamp(v){return v>50?50:v<-50?-50:v}
+function fdist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
+// pinch = Ctrl+wheel (what browsers/apps treat as zoom). Ctrl is held only while pinching.
+function zoomEnd(){if(g.zoomCtrl){send({t:'key',k:'Ctrl',d:0});g.zoomCtrl=false}}
+// three-finger swipe -> desktop switching, by the OS of the PC the phone controls
+function swipe3(dir){
+  var mac=hello&&hello.os==='mac';
+  var m={up:mac?[['Ctrl'],'Up']:[['Meta'],'Tab'],down:mac?[['Ctrl'],'Down']:[['Meta'],'d'],
+         left:mac?[['Ctrl'],'Right']:[['Ctrl','Meta'],'Right'],right:mac?[['Ctrl'],'Left']:[['Ctrl','Meta'],'Left']}[dir];
+  combo(m[0],m[1]);buzz(15);
+}
 function flush(){
   if(mvX||mvY){
     var m=Math.sqrt(mvX*mvX+mvY*mvY),k=cfg.sens*(1+Math.min(m,30)*0.05);   // acceleration: up to 2.5x on fast swipes
@@ -208,7 +218,7 @@ function flush(){
 }
 setInterval(flush,16);
 function endG(cancel){
-  clearTimeout(g.timer);
+  clearTimeout(g.timer);zoomEnd();
   if(g.mode==='one'&&g.drag&&cancel!==true)btn(0,0);
   flush();remX=remY=sRX=sRY=mvX=mvY=scX=scY=0;g={mode:'idle'};
 }
@@ -225,8 +235,8 @@ pad.addEventListener('touchstart',function(e){
     if(g.mode==='one'&&g.drag)return;
     if(g.mode==='ignore')return;
     c=cen(e.targetTouches);
-    if(g.mode==='two'){g.x=c.x;g.y=c.y}
-    else{clearTimeout(g.timer);g={mode:'two',x:c.x,y:c.y,t0:Date.now(),dist:0}}
+    if(g.mode==='two'){g.x=c.x;g.y=c.y;g.d=null;g.n=Math.max(g.n,n)}
+    else{clearTimeout(g.timer);g={mode:'two',x:c.x,y:c.y,t0:Date.now(),dist:0,n:n,d:null,pinch:0,pan:0,sx:0,sy:0,kind:'',fired:false,zacc:0}}
   }
 },{passive:false});
 pad.addEventListener('touchmove',function(e){
@@ -239,9 +249,33 @@ pad.addEventListener('touchmove',function(e){
     dx=t.clientX-g.x;dy=t.clientY-g.y;g.x=t.clientX;g.y=t.clientY;
     g.dist+=Math.abs(dx)+Math.abs(dy);mvX+=dx;mvY+=dy;
   }else if(g.mode==='two'&&e.targetTouches.length>=2){
-    var c=cen(e.targetTouches);
+    var ts=e.targetTouches,c=cen(ts);
     dx=c.x-g.x;dy=c.y-g.y;g.x=c.x;g.y=c.y;
-    g.dist+=Math.abs(dx)+Math.abs(dy);scX+=dx;scY+=dy;
+    g.dist+=Math.abs(dx)+Math.abs(dy);
+    if(g.n>=3){
+      g.sx+=dx;g.sy+=dy;
+      if(!g.fired&&Math.max(Math.abs(g.sx),Math.abs(g.sy))>70){
+        g.fired=true;
+        swipe3(Math.abs(g.sx)>Math.abs(g.sy)?(g.sx<0?'left':'right'):(g.sy<0?'up':'down'));
+      }
+      return;
+    }
+    var d=fdist(ts[0],ts[1]),dd=g.d===null?0:d-g.d;g.d=d;
+    g.pinch+=dd;g.pan+=Math.abs(dx)+Math.abs(dy);
+    // decide once: fingers moving apart/together beats the centre moving -> zoom, otherwise scroll
+    if(!g.kind){
+      if(Math.abs(g.pinch)>=20&&Math.abs(g.pinch)>g.pan)g.kind='zoom';
+      else if(g.pan>=40&&g.pan>2*Math.abs(g.pinch))g.kind='scroll';
+    }
+    if(g.kind==='zoom'){
+      g.zacc+=dd;
+      var z=Math.trunc(g.zacc/18);
+      if(z){
+        g.zacc-=z*18;
+        if(!g.zoomCtrl&&!modOn.Ctrl){send({t:'key',k:'Ctrl',d:1});g.zoomCtrl=true}
+        send({t:'sc',dx:0,dy:z});   // fingers apart -> wheel up -> zoom in
+      }
+    }else{scX+=dx;scY+=dy}
   }
 },{passive:false});
 function tEnd(e){
@@ -258,9 +292,10 @@ function tEnd(e){
       g={mode:'ignore'};
     }
   }else if(g.mode==='two'){
-    if(rem>=2){var c=cen(e.targetTouches);g.x=c.x;g.y=c.y}
+    if(rem>=2){var c=cen(e.targetTouches);g.x=c.x;g.y=c.y;g.d=null}
     else{
-      if(cfg.tap&&g.dist<10&&Date.now()-g.t0<350){click(1);buzz(10)}
+      zoomEnd();
+      if(cfg.tap&&g.n<3&&g.dist<10&&Date.now()-g.t0<350){click(1);buzz(10)}
       g={mode:'ignore'};
     }
   }

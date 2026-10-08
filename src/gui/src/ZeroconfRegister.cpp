@@ -34,7 +34,7 @@ ZeroconfRegister::~ZeroconfRegister()
 }
 
 void ZeroconfRegister::registerService(const ZeroconfRecord& record,
-    quint16 servicePort)
+    quint16 servicePort, const QByteArray& txtRecord)
 {
     if (m_DnsServiceRef) {
         qWarning("Warning: Already registered a service for this object");
@@ -53,7 +53,8 @@ void ZeroconfRegister::registerService(const ZeroconfRecord& record,
         record.serviceName.toUtf8().constData(),
         record.registeredType.toUtf8().constData(),
         record.replyDomain.isEmpty() ? nullptr : record.replyDomain.toUtf8().constData(),
-        nullptr, bigEndianPort, 0, nullptr, registerService, this);
+        nullptr, bigEndianPort, static_cast<uint16_t>(txtRecord.size()),
+        txtRecord.isEmpty() ? nullptr : txtRecord.constData(), registerService, this);
 
     if (err != kDNSServiceErr_NoError) {
         Q_EMIT error(err);

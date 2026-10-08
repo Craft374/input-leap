@@ -41,10 +41,12 @@ public:
 private slots:
     void serverDetected(const QList<ZeroconfRecord>& list);
     void clientDetected(const QList<ZeroconfRecord>& list);
+    void peerResolved(const QString& host, const QByteArray& txtRecord);
     void errorHandle(DNSServiceErrorType errorCode);
 
 private:
     bool registerService(bool server);
+    void resolvePeer(const ZeroconfRecord& record);
 
 private:
     MainWindow* m_pMainWindow;

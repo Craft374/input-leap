@@ -40,7 +40,7 @@ public:
     ZeroconfRegister(QObject* parent = nullptr);
     ~ZeroconfRegister();
 
-    void registerService(const ZeroconfRecord& record, quint16 servicePort);
+    void registerService(const ZeroconfRecord& record, quint16 servicePort, const QByteArray& txtRecord = QByteArray());
     inline ZeroconfRecord registeredRecord() const { return finalRecord; }
 
 Q_SIGNALS:

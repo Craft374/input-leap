@@ -102,6 +102,7 @@ class MainWindow : public QMainWindow
         void autoAddScreen(const QString name);
         void updateZeroconfService();
         void serverDetected(const QString name);
+        void peerDetected(const QString& ip) { m_PeerIpHint = ip; }
 
     Q_SIGNALS:
         void requestLanguageChange(QString newLanguage);
@@ -167,6 +168,8 @@ public slots:
         void updatePhoneServer();
         void updatePeerLink();
         void beginSwap();
+        void requestSwapTo(const QStringList& hosts, int index, const peerlink::SwapRequest& request, bool iAmServer);
+        void refreshNetwork();
         peerlink::SwapReply handleSwapRequest(const peerlink::SwapRequest& request);
         void applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint);
         bool adoptLayout(const QVariantMap& layout, QString* why);
@@ -201,6 +204,7 @@ public slots:
         PhoneServer* m_pPhoneServer = nullptr;   // owned through QObject parent
         PeerLink* m_pPeerLink = nullptr;         // owned through QObject parent
         bool m_SwapInProgress = false;
+        QString m_PeerIpHint;   // the other PC's address as announced over Bonjour (fresh after wifi changes)
 
         bool m_fingerprint_expanded = false;
 

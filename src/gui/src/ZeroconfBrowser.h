@@ -57,3 +57,32 @@ private:
     QList<ZeroconfRecord> m_Records;
     QString m_BrowsingType;
 };
+
+// One-shot: finds the host name and TXT record of a browsed service. Emits resolved() once;
+// the owner deletes it afterwards (deleteLater is fine from the slot).
+class ZeroconfResolver : public QObject
+{
+    Q_OBJECT
+
+public:
+    ZeroconfResolver(QObject* parent = nullptr);
+    ~ZeroconfResolver();
+    void resolve(const ZeroconfRecord& record);
+
+Q_SIGNALS:
+    void resolved(const QString& host, const QByteArray& txtRecord);
+    void error(DNSServiceErrorType err);
+
+private slots:
+    void socketReadyRead();
+
+private:
+    static void DNSSD_API resolveReply(DNSServiceRef, DNSServiceFlags, quint32,
+            DNSServiceErrorType errorCode, const char* fullName, const char* hostTarget,
+            quint16 port, quint16 txtLen, const unsigned char* txtRecord, void* context);
+
+private:
+    DNSServiceRef m_DnsServiceRef;
+    std::unique_ptr<QSocketNotifier> socket_;
+    bool m_Done;
+};

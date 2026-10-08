@@ -63,6 +63,52 @@ static void silence_avahi_warning()
 #endif
 }
 
+// The TXT record carries this PC's IPv4 addresses ("ip=a,b"), so the peer does not depend on
+// resolving our host name (which fails on many Windows/Mac combinations).
+static QByteArray localIpTxtRecord()
+{
+    QStringList ips;
+    for (const QHostAddress& address : QNetworkInterface::allAddresses()) {
+        if (address.protocol() == QAbstractSocket::IPv4Protocol && !address.isLoopback()
+            && !address.isInSubnet(QHostAddress(QStringLiteral("169.254.0.0")), 16)) {
+            ips << address.toString();
+        }
+    }
+    const QByteArray entry = "ip=" + ips.join(QLatin1Char(',')).toLatin1();
+    if (ips.isEmpty() || entry.size() > 255) {
+        return QByteArray();
+    }
+    return QByteArray(1, static_cast<char>(entry.size())) + entry;
+}
+
+static QStringList ipsFromTxtRecord(const QByteArray& txt)
+{
+    for (int i = 0; i < txt.size();) {
+        const int len = static_cast<unsigned char>(txt[i]);
+        const QByteArray entry = txt.mid(i + 1, len);
+        if (entry.startsWith("ip=")) {
+            return QString::fromLatin1(entry.mid(3)).split(QLatin1Char(','), Qt::SkipEmptyParts);
+        }
+        i += len + 1;
+    }
+    return QStringList();
+}
+
+// Prefers an address on the same /24 as one of our own interfaces (the wifi both PCs share).
+static QString pickReachableIp(const QStringList& ips)
+{
+    const auto locals = QNetworkInterface::allAddresses();
+    for (const QString& ip : ips) {
+        const QHostAddress candidate(ip);
+        for (const QHostAddress& local : locals) {
+            if (local.protocol() == QAbstractSocket::IPv4Protocol && candidate.isInSubnet(local, 24)) {
+                return ip;
+            }
+        }
+    }
+    return ips.value(0);
+}
+
 ZeroconfService::ZeroconfService(MainWindow* mainWindow) :
     m_pMainWindow(mainWindow),
     m_ServiceRegistered(false)
@@ -92,7 +138,7 @@ void ZeroconfService::serverDetected(const QList<ZeroconfRecord>& list)
         registerService(false);
         m_pMainWindow->appendLogInfo(tr("zeroconf server detected: %1").arg(
             record.serviceName));
-        m_pMainWindow->serverDetected(record.serviceName);
+        resolvePeer(record);
     }
 }
 
@@ -102,7 +148,50 @@ void ZeroconfService::clientDetected(const QList<ZeroconfRecord>& list)
         m_pMainWindow->appendLogInfo(tr("zeroconf client detected: %1").arg(
             record.serviceName));
         m_pMainWindow->autoAddScreen(record.serviceName);
+        resolvePeer(record);
     }
+}
+
+void ZeroconfService::resolvePeer(const ZeroconfRecord& record)
+{
+    auto* resolver = new ZeroconfResolver(this);
+    connect(resolver, &ZeroconfResolver::resolved, this, &ZeroconfService::peerResolved);
+    connect(resolver, &ZeroconfResolver::resolved, resolver, &QObject::deleteLater);
+    connect(resolver, &ZeroconfResolver::error, resolver, &QObject::deleteLater);
+    connect(resolver, &ZeroconfResolver::error, this, [this, name = record.serviceName](DNSServiceErrorType code) {
+        m_pMainWindow->appendLogError(tr("zeroconf could not resolve %1 (error %2)").arg(name).arg(code));
+    });
+    resolver->resolve(record);
+}
+
+void ZeroconfService::peerResolved(const QString& host, const QByteArray& txtRecord)
+{
+    const bool toServer = m_pMainWindow->app_role() == AppRole::Client;   // a client browses for servers
+    const auto report = [this, toServer](const QString& ip) {
+        m_pMainWindow->appendLogInfo(tr("zeroconf peer address: %1").arg(ip));
+        if (toServer) {
+            m_pMainWindow->serverDetected(ip);
+        }
+        else {
+            m_pMainWindow->peerDetected(ip);
+        }
+    };
+
+    const QString ip = pickReachableIp(ipsFromTxtRecord(txtRecord));
+    if (!ip.isEmpty()) {
+        report(ip);
+        return;
+    }
+    // older peer without the TXT record: fall back to its mDNS host name
+    QHostInfo::lookupHost(host, this, [this, host, report](const QHostInfo& info) {
+        for (const QHostAddress& address : info.addresses()) {
+            if (address.protocol() == QAbstractSocket::IPv4Protocol) {
+                report(address.toString());
+                return;
+            }
+        }
+        m_pMainWindow->appendLogError(tr("zeroconf could not find an address for %1").arg(host));
+    });
 }
 
 void ZeroconfService::errorHandle(DNSServiceErrorType errorCode)
@@ -128,13 +217,13 @@ bool ZeroconfService::registerService(bool server)
                 zeroconf_register_->registerService(
                     ZeroconfRecord(tr("%1").arg(m_pMainWindow->getScreenName()),
                     QLatin1String(m_ServerServiceName), QString()),
-                    m_zeroconfServer.serverPort());
+                    m_zeroconfServer.serverPort(), localIpTxtRecord());
             }
             else {
                 zeroconf_register_->registerService(
                     ZeroconfRecord(tr("%1").arg(m_pMainWindow->getScreenName()),
                     QLatin1String(m_ClientServiceName), QString()),
-                    m_zeroconfServer.serverPort());
+                    m_zeroconfServer.serverPort(), localIpTxtRecord());
             }
 
             m_ServiceRegistered = true;

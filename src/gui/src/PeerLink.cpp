@@ -409,6 +409,7 @@ struct ClientJob {
     QByteArray code, buf, nc, ns, requestBody;
     int stage = 0;          // 0 await challenge, 1 await reply
     bool finished = false;
+    bool connected = false;
     std::function<void(const SwapReply&)> done;
 };
 }
@@ -440,6 +441,7 @@ void PeerLink::requestSwap(const QString& host, quint16 port, const QString& pai
         if (!reply.ok)
             reply.why = why.isEmpty() ? reply.why : why;
         reply.address = ipv4String(sock->peerAddress());
+        reply.unreachable = !job->connected;
         sock->abort();
         sock->deleteLater();
         job->done(reply);
@@ -451,6 +453,7 @@ void PeerLink::requestSwap(const QString& host, quint16 port, const QString& pai
     });
     connect(sock, &QTcpSocket::disconnected, sock, [finish] { finish(QObject::tr("연결이 끊어졌습니다")); });
     connect(sock, &QTcpSocket::connected, sock, [job, sock] {
+        job->connected = true;
         job->nc = randomNonce();
         sendLine(sock, QJsonObject{{"t", "hello"}, {"nc", QString::fromLatin1(job->nc)}});
     });

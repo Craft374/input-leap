@@ -36,7 +36,7 @@
 #include <QDir>
 
 SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
-    QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint),
+    QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint),
     ui_{std::make_unique<Ui::SettingsDialog>()},
     app_config_(config)
 {
@@ -129,6 +129,14 @@ SettingsDialog::SettingsDialog(QWidget* parent, AppConfig& config) :
     });
     connect(ui_->m_pButtonBrowseLog, &QPushButton::clicked, this, &SettingsDialog::browseLogClicked);
     connect(ui_->m_pComboLanguage, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsDialog::languageChanged);
+
+    // The options scroll and the window is resizable; open at the natural size, capped to the screen
+    // so the OK button never ends up off screen.
+    setSizeGripEnabled(true);
+    setMinimumSize(320, 240);
+    const QScreen* screen = parent != nullptr && parent->screen() != nullptr ? parent->screen() : QGuiApplication::primaryScreen();
+    const QSize wanted = ui_->m_pScrollContents->sizeHint() + QSize(40, ui_->buttonBox->sizeHint().height() + 40);
+    resize(wanted.boundedTo(screen != nullptr ? screen->availableSize() * 0.85 : wanted));
 }
 
 void SettingsDialog::accept()

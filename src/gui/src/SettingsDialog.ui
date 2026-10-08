@@ -15,6 +15,16 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QScrollArea" name="m_pScrollArea">
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <widget class="QWidget" name="m_pScrollContents">
+      <layout class="QVBoxLayout" name="contentsLayout">
+   <item>
     <widget class="QGroupBox" name="m_pGroupGeneral">
      <property name="enabled">
       <bool>true</bool>
@@ -310,7 +320,7 @@
       <item row="4" column="0" colspan="2">
        <widget class="QLabel" name="m_pLabelPeerHint">
         <property name="text">
-         <string>두 PC 모두 같은 코드(8자 이상)를 입력해야 합니다. 상대 PC 주소는 처음 한 번만 입력하면 됩니다. 이후엔 자동으로 기억합니다.</string>
+         <string>두 PC 모두 같은 코드(8자 이상)를 입력해야 합니다. 상대 PC 주소에는 상대 PC 메인 화면에 표시된 IP 주소(예: 192.168.0.12)를 입력하세요. 같은 와이파이에서 자동으로 찾아지면 비워 둬도 되고, 역할을 바꾼 뒤에는 자동으로 기억합니다.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -501,6 +511,10 @@
       </size>
      </property>
     </spacer>
+   </item>
+      </layout>
+     </widget>
+    </widget>
    </item>
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">

@@ -39,6 +39,7 @@ struct SwapReply {
     QString fingerprint;
     QVariantMap layout;        // non-empty only when the replier is currently the server
     QString address;           // filled by the REQUESTING PeerLink: replier IPv4 (the address that answered)
+    bool unreachable = false;  // filled by the REQUESTING PeerLink: no connection was made (bad name, wrong IP, offline)
 };
 
 QString generatePairingCode();            // 8 chars from an unambiguous alphabet, QRandomGenerator::system()
