@@ -149,8 +149,10 @@ TEST(PeerLinkTests, RequestRoundTrip)
     in.fromRole = "server";
     in.fromFingerprint = "AB:CD";
     in.layout = {{"numColumns", 3}, {"flag", true}, {"name", QString::fromUtf8("화면")}, {"ratio", 0.5}};
+    in.port = 24798;
     SwapRequest out;
     ASSERT_TRUE(decodeRequest(encodeRequest(in), &out));
+    EXPECT_EQ(out.port, 24798);
     EXPECT_EQ(out.fromName, in.fromName);
     EXPECT_EQ(out.fromRole, QString("server"));
     EXPECT_EQ(out.fromFingerprint, in.fromFingerprint);
@@ -176,6 +178,11 @@ TEST(PeerLinkTests, RequestRejectsBadInput)
     EXPECT_FALSE(decodeRequest(R"({"name":"a","role":"server","fp":"","layout":{"x":null}})", &out));
     EXPECT_FALSE(decodeRequest(R"({"name":"a","role":"server","fp":"","layout":{"x":[1]}})", &out));
     EXPECT_FALSE(decodeRequest(QByteArray(R"({"name":")") + QByteArray(300, 'a') + R"(","role":"server","fp":"","layout":{}})", &out));
+    // a missing or out-of-range port means "unknown"
+    ASSERT_TRUE(decodeRequest(R"({"name":"a","role":"client","fp":"","layout":{},"port":70000})", &out));
+    EXPECT_EQ(out.port, 0);
+    ASSERT_TRUE(decodeRequest(R"({"name":"a","role":"client","fp":"","layout":{}})", &out));
+    EXPECT_EQ(out.port, 0);
     // a client never carries a layout: dropped, not trusted
     ASSERT_TRUE(decodeRequest(R"({"name":"a","role":"client","fp":"","layout":{"x":1}})", &out));
     EXPECT_TRUE(out.layout.isEmpty());

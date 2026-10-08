@@ -68,6 +68,7 @@ private:
     void handleInput(QTcpSocket* s, const QString& type, const QJsonObject& msg);
     void typeText(QTcpSocket* s, const QString& text);
     void pressKey(phone::Key key, bool down);
+    static QByteArray pageVersion();
     void respond(QTcpSocket* s, int code, const QByteArray& contentType, const QByteArray& body);
     void sendJson(QTcpSocket* s, const QJsonObject& obj);
     void closeAfterFlush(QTcpSocket* s, quint16 wsCode);

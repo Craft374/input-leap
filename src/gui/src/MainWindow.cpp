@@ -221,6 +221,26 @@ bool runElevatedServiceCommand(const wchar_t* command)
         QStringLiteral("%1 InputLeap").arg(QString::fromWCharArray(command)));
 }
 
+// The installer only opens the default port (24800) and the service shows no firewall prompt, so
+// a Windows PC acting as server with another port is unreachable. Opens it once (one UAC prompt).
+void ensureServerFirewallRule(int port)
+{
+    wchar_t systemDirectory[MAX_PATH]{};
+    if (GetSystemDirectoryW(systemDirectory, MAX_PATH) == 0) {
+        return;
+    }
+    const QString netsh = QDir::toNativeSeparators(QString::fromWCharArray(systemDirectory) +
+                                                   QStringLiteral("/netsh.exe"));
+    const QString name = QStringLiteral("InputLeafPlus server %1").arg(port);
+    if (QProcess::execute(netsh, {QStringLiteral("advfirewall"), QStringLiteral("firewall"),
+                                  QStringLiteral("show"), QStringLiteral("rule"),
+                                  QStringLiteral("name=") + name}) == 0) {
+        return;   // already there
+    }
+    runElevated(netsh, QStringLiteral("advfirewall firewall add rule name=\"%1\" protocol=TCP dir=in "
+                                      "localport=%2 action=allow profile=any").arg(name).arg(port));
+}
+
 // the daemon that ships next to this executable
 QString daemonPath()
 {
@@ -956,6 +976,12 @@ void MainWindow::start_cmd_app()
     args << "--profile-dir" << QString::fromStdString("\"" + inputleap::DataDirectories::profile().u8string() + "\"");
 #endif
 
+#if defined(Q_OS_WIN)
+    if (app_role() == AppRole::Server) {
+        ensureServerFirewallRule(appConfig().port());
+    }
+#endif
+
     if ((app_role() == AppRole::Client && !clientArgs(args, app))
         || (app_role() == AppRole::Server && !serverArgs(args, app)))
     {
@@ -1676,6 +1702,7 @@ void MainWindow::beginSwap()
     request.fromName = getScreenName();
     request.fromRole = iAmServer ? QStringLiteral("server") : QStringLiteral("client");
     request.fromFingerprint = localSha256();
+    request.port = appConfig().port();
     if (iAmServer) {
         request.layout = serverConfig().toVariantMap();
     }
@@ -1719,7 +1746,7 @@ void MainWindow::requestSwapTo(const QStringList& hosts, int index, const peerli
             const QString address = reply.address.isEmpty() ? host : reply.address;
             appConfig().setPeerAddress(address);
             appConfig().saveSettings();
-            applyRole(iAmServer ? AppRole::Client : AppRole::Server, address, reply.fingerprint);
+            applyRole(iAmServer ? AppRole::Client : AppRole::Server, address, reply.fingerprint, reply.port);
         });
 }
 
@@ -1755,6 +1782,7 @@ peerlink::SwapReply MainWindow::handleSwapRequest(const peerlink::SwapRequest& r
 
     reply.name = getScreenName();
     reply.fingerprint = localSha256();
+    reply.port = appConfig().port();
     if (iAmServer) {
         if (!serverConfig().hasScreen(request.fromName)) {
             return refuse(tr("서버 화면 구성에 '%1' PC가 없습니다").arg(request.fromName));
@@ -1778,16 +1806,23 @@ peerlink::SwapReply MainWindow::handleSwapRequest(const peerlink::SwapRequest& r
     m_SwapInProgress = true;
     const AppRole newRole = iAmServer ? AppRole::Client : AppRole::Server;
     QTimer::singleShot(300, this, [this, newRole, request]() {
-        applyRole(newRole, request.fromAddress, request.fromFingerprint);
+        applyRole(newRole, request.fromAddress, request.fromFingerprint, request.port);
     });
     reply.ok = true;
     return reply;
 }
 
-void MainWindow::applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint)
+void MainWindow::applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint, int peerPort)
 {
     m_SwapInProgress = true;
     const bool toServer = newRole == AppRole::Server;
+
+    // one port setting serves both roles (listen as server, connect as client), so a client that
+    // kept its own different port would never reach the new server
+    if (!toServer && peerPort > 0 && peerPort != appConfig().port()) {
+        appendLogInfo(tr("포트를 상대 PC에 맞춰 %1(으)로 바꿉니다").arg(peerPort));
+        appConfig().setPort(peerPort);
+    }
 
     // pre-trust the peer so the fingerprint dialog does not show up (the peer is authenticated by the pairing code)
     if (!peerFingerprint.isEmpty() && appConfig().getCryptoEnabled()) {

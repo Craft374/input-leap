@@ -180,17 +180,25 @@ bool takeLine(QByteArray& buffer, QByteArray* line, bool* overflow, int maxLine)
     return true;
 }
 
+static int portFromJson(const QJsonValue& value)
+{
+    const int port = value.toInt(0);
+    return port >= 1 && port <= 65535 ? port : 0;
+}
+
 QByteArray encodeRequest(const SwapRequest& request)
 {
     return QJsonDocument(QJsonObject{{"name", request.fromName}, {"role", request.fromRole},
-                                     {"fp", request.fromFingerprint}, {"layout", toJson(request.layout)}})
+                                     {"fp", request.fromFingerprint}, {"layout", toJson(request.layout)},
+                                     {"port", request.port}})
         .toJson(QJsonDocument::Compact);
 }
 
 QByteArray encodeReply(const SwapReply& reply)
 {
     return QJsonDocument(QJsonObject{{"ok", reply.ok}, {"why", reply.why.left(kMaxText)}, {"name", reply.name},
-                                     {"fp", reply.fingerprint}, {"layout", toJson(reply.layout)}})
+                                     {"fp", reply.fingerprint}, {"layout", toJson(reply.layout)},
+                                     {"port", reply.port}})
         .toJson(QJsonDocument::Compact);
 }
 
@@ -204,6 +212,7 @@ bool decodeRequest(const QByteArray& json, SwapRequest* request)
         || !shortText(o.value("fp"), &r.fromFingerprint, 256)
         || !o.value("layout").isObject() || !fromJson(o.value("layout").toObject(), &r.layout))
         return false;
+    r.port = portFromJson(o.value("port"));
     if (r.fromRole != "server")
         r.layout.clear();
     *request = r;
@@ -219,6 +228,7 @@ bool decodeReply(const QByteArray& json, SwapReply* reply)
         || !o.value("layout").isObject() || !fromJson(o.value("layout").toObject(), &r.layout))
         return false;
     r.ok = o.value("ok").toBool();
+    r.port = portFromJson(o.value("port"));
     *reply = r;
     return true;
 }

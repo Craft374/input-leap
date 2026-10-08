@@ -98,8 +98,11 @@ bool OSXEventQueueBuffer::addEvent(std::uint32_t dataID)
                             &event);
 
     if (error == noErr) {
-
-        assert(m_carbonEventQueue != nullptr);
+        // the tap can still deliver mouse moves while the server shuts down, before init() ran
+        if (m_carbonEventQueue == nullptr) {
+            ReleaseEvent(event);
+            return false;
+        }
 
         error = PostEventToQueue(
             m_carbonEventQueue,

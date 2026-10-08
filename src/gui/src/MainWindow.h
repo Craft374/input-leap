@@ -171,7 +171,7 @@ public slots:
         void requestSwapTo(const QStringList& hosts, int index, const peerlink::SwapRequest& request, bool iAmServer);
         void refreshNetwork();
         peerlink::SwapReply handleSwapRequest(const peerlink::SwapRequest& request);
-        void applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint);
+        void applyRole(AppRole newRole, const QString& peerHost, const QString& peerFingerprint, int peerPort);
         bool adoptLayout(const QVariantMap& layout, QString* why);
         QString swapBlocker() const;
         QString localSha256() const;

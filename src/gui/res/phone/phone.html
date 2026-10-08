@@ -114,6 +114,7 @@ function saveCfg(){sv('ph.cfg',JSON.stringify(cfg))}
 function buzz(ms){if(cfg.vib&&navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}}}
 
 /* ---- connection ---- */
+var VER='__PAGE_VER__';   // filled in by the server; a different hello.ver means this tab shows an old page
 var ws=null,authed=false,pin=ld('ph.pin',''),tries=0,rt=0,pingT=0,stopRetry=false,hello=null;
 function send(o){if(ws&&authed&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function setStatus(c,t){$('dot').className=c;$('st').textContent=t}
@@ -144,6 +145,7 @@ function onMsg(data){
   if(!m||typeof m!=='object')return;
   if(m.t==='hello'){
     if(m.ok===true){
+      if(m.ver&&VER.charAt(0)!=='_'&&m.ver!==VER){location.reload();return}
       authed=true;hello=m;tries=0;sv('ph.pin',pin);$('pin').className='';
       setLabels(m.os);showInfo();
       clearInterval(pingT);pingT=setInterval(function(){send({t:'ping'})},15000);
@@ -200,7 +202,7 @@ function swipe3(dir){
   var mac=hello&&hello.os==='mac';
   var m={up:mac?[['Ctrl'],'Up']:[['Meta'],'Tab'],down:mac?[['Ctrl'],'Down']:[['Meta'],'d'],
          left:mac?[['Ctrl'],'Right']:[['Ctrl','Meta'],'Right'],right:mac?[['Ctrl'],'Left']:[['Ctrl','Meta'],'Left']}[dir];
-  combo(m[0],m[1]);buzz(15);
+  combo(m[0],m[1]);buzz(15);toast('세 손가락 '+{up:'↑',down:'↓',left:'←',right:'→'}[dir]);
 }
 function flush(){
   if(mvX||mvY){
@@ -264,7 +266,7 @@ pad.addEventListener('touchmove',function(e){
     g.pinch+=dd;g.pan+=Math.abs(dx)+Math.abs(dy);
     // decide once: fingers moving apart/together beats the centre moving -> zoom, otherwise scroll
     if(!g.kind){
-      if(Math.abs(g.pinch)>=20&&Math.abs(g.pinch)>g.pan)g.kind='zoom';
+      if(Math.abs(g.pinch)>=20&&Math.abs(g.pinch)>g.pan){g.kind='zoom';toast('확대/축소 (Ctrl+휠)')}
       else if(g.pan>=40&&g.pan>2*Math.abs(g.pinch))g.kind='scroll';
     }
     if(g.kind==='zoom'){

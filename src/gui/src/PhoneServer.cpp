@@ -11,6 +11,7 @@
 
 #include "PhoneProtocol.h"
 
+#include <QCryptographicHash>
 #include <QFile>
 #include <QHostAddress>
 #include <QJsonDocument>
@@ -298,7 +299,9 @@ bool PhoneServer::processHttp(QTcpSocket* s)
         if (!page.open(QIODevice::ReadOnly)) {
             respond(s, 500, "text/plain; charset=utf-8", "휴대폰 페이지 파일을 찾을 수 없습니다");
         } else {
-            respond(s, 200, "text/html; charset=utf-8", page.readAll());
+            QByteArray html = page.readAll();
+            html.replace("__PAGE_VER__", pageVersion());
+            respond(s, 200, "text/html; charset=utf-8", html);
         }
         return false;
     }
@@ -336,6 +339,16 @@ bool PhoneServer::processFrame(QTcpSocket* s)
         break;
     }
     return true;
+}
+
+// Changes whenever the page changes, so a tab opened before an app update reloads itself.
+QByteArray PhoneServer::pageVersion()
+{
+    QFile page(QStringLiteral(":/res/phone/phone.html"));
+    if (!page.open(QIODevice::ReadOnly)) {
+        return QByteArray();
+    }
+    return QCryptographicHash::hash(page.readAll(), QCryptographicHash::Md5).toHex().left(12);
 }
 
 void PhoneServer::respond(QTcpSocket* s, int code, const QByteArray& contentType, const QByteArray& body)
@@ -457,6 +470,7 @@ void PhoneServer::handleAuth(QTcpSocket* s, const QJsonObject& msg)
     hello["t"] = QStringLiteral("hello");
     hello["ok"] = true;
     hello["os"] = QString::fromLatin1(injector_->platformName());
+    hello["ver"] = QString::fromLatin1(pageVersion());
     sendJson(s, hello);
 
     QString why;

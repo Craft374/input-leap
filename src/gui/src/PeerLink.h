@@ -30,6 +30,7 @@ struct SwapRequest {
     QString fromFingerprint;   // sender local SHA-256 TLS fingerprint, "" if none
     QVariantMap layout;        // server layout, non-empty only when fromRole == "server"
     QString fromAddress;       // filled by the RECEIVING PeerLink: sender IPv4 as seen on the socket ("" if not IPv4)
+    int port = 0;              // sender's InputLeap port setting (0 = unknown); the new client connects to the new server's
 };
 
 struct SwapReply {
@@ -39,6 +40,7 @@ struct SwapReply {
     QString fingerprint;
     QVariantMap layout;        // non-empty only when the replier is currently the server
     QString address;           // filled by the REQUESTING PeerLink: replier IPv4 (the address that answered)
+    int port = 0;              // replier's InputLeap port setting (0 = unknown)
     bool unreachable = false;  // filled by the REQUESTING PeerLink: no connection was made (bad name, wrong IP, offline)
 };
 
