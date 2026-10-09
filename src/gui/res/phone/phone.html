@@ -61,7 +61,7 @@ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;backgrou
 <div id="app">
  <div id="bar"><span id="dot"></span><span id="st">연결 안 됨</span></div>
  <div id="warn">이 PC는 InputLeap 클라이언트입니다. 휴대폰 입력은 이 PC에만 적용됩니다. 마우스·키보드를 공유하는 서버 PC 주소로 다시 접속하세요.</div>
- <div id="pad"><span id="padhint">한 손가락: 이동 / 탭: 클릭<br>두 손가락 탭: 우클릭 / 두 손가락 쓸기: 스크롤(관성)<br>두 손가락 오므리기·펼치기: 축소·확대 / 세 손가락 스와이프: 화면 전환<br>길게 누른 뒤 드래그: 끌기</span></div>
+ <div id="pad"><span id="padhint">한 손가락: 이동 · 탭 클릭 · 길게 눌러 끌기<br>두 손가락: 탭=우클릭 · 쓸기=스크롤 · 오므리기/펼치기=축소/확대 · 빠르게 좌우 쓸기=뒤로/앞으로<br>세 손가락: 끌기 · 탭=사전 찾기 (설정에서 끄면 쓸기=화면 전환)<br>네 손가락: 위=Mission Control · 아래=앱 창 · 좌우=데스크톱 이동 · 오므리기=Launchpad · 펼치기=바탕화면</span></span></div>
  <div id="kb">
   <div class="row"><input id="txt" type="text" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="입력할 내용"><button class="b" id="send">전송</button><button class="b" id="dir">직접 입력</button></div>
   <div class="hint" id="dirhint" style="display:none">직접 입력: 글자(단어)가 확정되면 바로 전송됩니다.</div>
@@ -92,6 +92,8 @@ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;backgrou
  <label>스크롤 속도 <input id="sScr" type="range" min="0.5" max="4" step="0.1"></label>
  <label>스크롤 방향 반전 <input id="sRev" type="checkbox"></label>
  <label>탭하여 클릭 <input id="sTap" type="checkbox"></label>
+ <label>세 손가락 끌기 (끄면 세 손가락 쓸기=화면 전환) <input id="s3d" type="checkbox"></label>
+ <label>두 손가락 좌우 쓸기: 뒤로/앞으로 <input id="sPage" type="checkbox"></label>
  <label>진동 <input id="sVib" type="checkbox"></label>
  <label>화면 켜짐 유지 <input id="sWake" type="checkbox"></label>
  <button class="b" id="repin">PIN 다시 입력</button>
@@ -108,7 +110,7 @@ function sv(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function rm(k){try{localStorage.removeItem(k)}catch(e){}}
 
 /* ---- settings ---- */
-var cfg={sens:1.5,scroll:1.5,rev:false,tap:true,vib:true,wake:false};
+var cfg={sens:1.5,scroll:1.5,rev:false,tap:true,drag3:true,page:true,vib:true,wake:false};
 try{var o=JSON.parse(ld('ph.cfg','{}'));for(var k in cfg){if(typeof o[k]===typeof cfg[k])cfg[k]=o[k]}}catch(e){}
 function saveCfg(){sv('ph.cfg',JSON.stringify(cfg))}
 function buzz(ms){if(cfg.vib&&navigator.vibrate){try{navigator.vibrate(ms)}catch(e){}}}
@@ -197,13 +199,20 @@ function clamp(v){return v>50?50:v<-50?-50:v}
 function fdist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
 // pinch = Ctrl+wheel (what browsers/apps treat as zoom). Ctrl is held only while pinching.
 function zoomEnd(){if(g.zoomCtrl){send({t:'key',k:'Ctrl',d:0});g.zoomCtrl=false}}
-// three-finger swipe -> desktop switching, by the OS of the PC the phone controls
-function swipe3(dir){
+// Mac trackpad gestures -> keys, chosen by the OS of the PC the phone controls
+var GL={up:'위로 쓸기',down:'아래로 쓸기',left:'왼쪽으로 쓸기',right:'오른쪽으로 쓸기',pinchin:'오므리기',pinchout:'펼치기',back:'뒤로',fwd:'앞으로',lookup:'사전 찾기'};
+function gesture(name){
   var mac=hello&&hello.os==='mac';
-  var m={up:mac?[['Ctrl'],'Up']:[['Meta'],'Tab'],down:mac?[['Ctrl'],'Down']:[['Meta'],'d'],
-         left:mac?[['Ctrl'],'Right']:[['Ctrl','Meta'],'Right'],right:mac?[['Ctrl'],'Left']:[['Ctrl','Meta'],'Left']}[dir];
-  combo(m[0],m[1]);buzz(15);toast('세 손가락 '+{up:'↑',down:'↓',left:'←',right:'→'}[dir]);
+  var G={up:mac?[['Ctrl'],'Up']:[['Meta'],'Tab'],down:mac?[['Ctrl'],'Down']:[['Meta'],'d'],
+         left:mac?[['Ctrl'],'Right']:[['Ctrl','Meta'],'Right'],right:mac?[['Ctrl'],'Left']:[['Ctrl','Meta'],'Left'],
+         pinchin:mac?[[],'F4']:[[],'Meta'],pinchout:mac?[[],'F11']:[['Meta'],'d'],
+         back:mac?[['Meta'],'[']:[['Alt'],'Left'],fwd:mac?[['Meta'],']']:[['Alt'],'Right'],
+         lookup:mac?[['Meta','Ctrl'],'d']:null}[name];
+  if(!G)return;
+  combo(G[0],G[1]);buzz(15);toast(GL[name]);
 }
+function dir4(x,y){return Math.abs(x)>Math.abs(y)?(x<0?'left':'right'):(y<0?'up':'down')}
+function spread(ts){var c=cen(ts),s=0;for(var i=0;i<ts.length;i++)s+=Math.hypot(ts[i].clientX-c.x,ts[i].clientY-c.y);return s/ts.length}
 function flush(){
   if(mvX||mvY){
     var m=Math.sqrt(mvX*mvX+mvY*mvY),k=cfg.sens*(1+Math.min(m,30)*0.05);   // acceleration: up to 2.5x on fast swipes
@@ -238,6 +247,7 @@ function moStep(now){
 function endG(cancel){
   clearTimeout(g.timer);zoomEnd();
   if(g.mode==='one'&&g.drag&&cancel!==true)btn(0,0);
+  if(g.mode==='two'&&g.drag3&&cancel!==true)btn(0,0);
   flush();remX=remY=sRX=sRY=mvX=mvY=scX=scY=0;g={mode:'idle'};
 }
 pad.addEventListener('touchstart',function(e){
@@ -254,7 +264,7 @@ pad.addEventListener('touchstart',function(e){
     if(g.mode==='one'&&g.drag)return;
     if(g.mode==='ignore')return;
     c=cen(e.targetTouches);
-    if(g.mode==='two'){g.x=c.x;g.y=c.y;g.d=null;g.n=Math.max(g.n,n)}
+    if(g.mode==='two'){g.x=c.x;g.y=c.y;g.d=null;if(n>g.n){g.n=n;g.sx=g.sy=0;g.sp0=null;g.fired=false}}
     else{clearTimeout(g.timer);g={mode:'two',x:c.x,y:c.y,t0:Date.now(),dist:0,n:n,d:null,pinch:0,pan:0,sx:0,sy:0,kind:'',fired:false,zacc:0,vx:0,vy:0,lt:performance.now()}}
   }
 },{passive:false});
@@ -270,12 +280,19 @@ pad.addEventListener('touchmove',function(e){
   }else if(g.mode==='two'&&e.targetTouches.length>=2){
     var ts=e.targetTouches,c=cen(ts);
     dx=c.x-g.x;dy=c.y-g.y;g.x=c.x;g.y=c.y;
-    g.dist+=Math.abs(dx)+Math.abs(dy);
+    g.dist+=Math.abs(dx)+Math.abs(dy);g.sx+=dx;g.sy+=dy;
     if(g.n>=3){
-      g.sx+=dx;g.sy+=dy;
-      if(!g.fired&&Math.max(Math.abs(g.sx),Math.abs(g.sy))>70){
-        g.fired=true;
-        swipe3(Math.abs(g.sx)>Math.abs(g.sy)?(g.sx<0?'left':'right'):(g.sy<0?'up':'down'));
+      if(ts.length<g.n)return;   // a finger is already lifting
+      if(g.n===3&&cfg.drag3){    // three-finger drag
+        if(!g.drag3&&g.dist>=8){g.drag3=true;btn(0,1);buzz(15)}
+        if(g.drag3){mvX+=dx;mvY+=dy}
+        return;
+      }
+      var sp=spread(ts);if(g.sp0==null)g.sp0=sp;
+      if(!g.fired){
+        var ds=sp-g.sp0,mv=Math.max(Math.abs(g.sx),Math.abs(g.sy));
+        if(g.n>=4&&Math.abs(ds)>35&&Math.abs(ds)>mv){g.fired=true;gesture(ds<0?'pinchin':'pinchout')}
+        else if(mv>70){g.fired=true;gesture(dir4(g.sx,g.sy))}
       }
       return;
     }
@@ -315,11 +332,20 @@ function tEnd(e){
       g={mode:'ignore'};
     }
   }else if(g.mode==='two'){
-    if(rem>=2){var c=cen(e.targetTouches);g.x=c.x;g.y=c.y;g.d=null}
+    if(rem>=2){
+      var c=cen(e.targetTouches);g.x=c.x;g.y=c.y;g.d=null;
+      if(g.drag3){flush();btn(0,0);g.drag3=false}
+    }
     else{
       zoomEnd();
-      if(g.n<3&&g.kind!=='zoom'&&performance.now()-g.lt<80)moStart(g.vx,g.vy);
-      if(cfg.tap&&g.n<3&&g.dist<10&&Date.now()-g.t0<350){click(1);buzz(10)}
+      if(g.drag3){flush();btn(0,0);g.drag3=false}
+      var quick=g.dist<10&&Date.now()-g.t0<350;
+      if(g.n===2&&g.kind!=='zoom'&&cfg.page&&Date.now()-g.t0<400&&Math.abs(g.sx)>110&&Math.abs(g.sy)<Math.abs(g.sx)/3)gesture(g.sx>0?'back':'fwd');
+      else if(g.n<3&&g.kind!=='zoom'&&performance.now()-g.lt<80)moStart(g.vx,g.vy);
+      if(cfg.tap&&quick){
+        if(g.n<3){click(1);buzz(10)}
+        else if(g.n===3)gesture('lookup');
+      }
       g={mode:'ignore'};
     }
   }
@@ -392,7 +418,7 @@ function bind(id,key){
     if(key==='wake')wake();
   });
 }
-bind('sSens','sens');bind('sScr','scroll');bind('sRev','rev');bind('sTap','tap');bind('sVib','vib');bind('sWake','wake');
+bind('sSens','sens');bind('sScr','scroll');bind('sRev','rev');bind('sTap','tap');bind('s3d','drag3');bind('sPage','page');bind('sVib','vib');bind('sWake','wake');
 $('gear').addEventListener('click',function(){sh.className='open'});
 $('sclose').addEventListener('click',function(){sh.className=''});
 sh.addEventListener('click',function(e){if(e.target===sh)sh.className=''});

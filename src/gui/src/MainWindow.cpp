@@ -16,7 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <atomic>
 #include <iostream>
+#include <thread>
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
@@ -692,7 +694,12 @@ void MainWindow::set_icon(AppConnectionState state)
 
 void MainWindow::trayActivated(QSystemTrayIcon::ActivationReason reason)
 {
+    // Windows: a single click already opens the window instead of waiting for a double click
+#if defined(Q_OS_WIN)
+    if (reason == QSystemTrayIcon::Trigger)
+#else
     if (reason == QSystemTrayIcon::DoubleClick)
+#endif
     {
         if (isVisible())
         {
@@ -988,7 +995,11 @@ void MainWindow::start_cmd_app()
 
 #if defined(Q_OS_WIN)
     if (app_role() == AppRole::Server) {
-        ensureServerFirewallRule(appConfig().port());
+        static std::atomic<int> checkedPort{0};   // the rule only needs checking once per port and run
+        const int port = appConfig().port();
+        if (checkedPort.exchange(port) != port) {
+            std::thread([port]() { ensureServerFirewallRule(port); }).detach();
+        }
     }
 #endif
 
@@ -1022,13 +1033,14 @@ void MainWindow::start_cmd_app()
 
     if (desktopMode)
     {
+        // not waitForStarted(): that froze the window while antivirus scanned the executable
+        connect(cmd_app_process_, &QProcess::errorOccurred, this, [this, app](QProcess::ProcessError error) {
+            if (error == QProcess::FailedToStart) {
+                show();
+                QMessageBox::warning(this, tr("Program can not be started"), QString(tr("The executable<br><br>%1<br><br>could not be successfully started, although it does exist. Please check if you have sufficient permissions to run this program.").arg(app)));
+            }
+        });
         cmd_app_process_->start(app, args);
-        if (!cmd_app_process_->waitForStarted())
-        {
-            show();
-            QMessageBox::warning(this, tr("Program can not be started"), QString(tr("The executable<br><br>%1<br><br>could not be successfully started, although it does exist. Please check if you have sufficient permissions to run this program.").arg(app)));
-            return;
-        }
     }
 
     if (serviceMode)
@@ -1243,9 +1255,9 @@ void MainWindow::stopDesktop()
 
     if (cmd_app_process_->isOpen()) {
         cmd_app_process_->terminate();
-        if (!cmd_app_process_->waitForFinished(5000)) {
+        if (!cmd_app_process_->waitForFinished(2000)) {
             cmd_app_process_->kill();
-            cmd_app_process_->waitForFinished(5000);
+            cmd_app_process_->waitForFinished(2000);
         }
         cmd_app_process_->close();
     }
