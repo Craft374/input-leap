@@ -776,6 +776,16 @@ void MainWindow::updateFromLogLine(const QString &line)
 void MainWindow::checkConnected(const QString& line)
 {
     // TODO: implement ipc connection state messages to replace this hack.
+    if (connection_state() == AppConnectionState::CONNECTING && app_role() == AppRole::Client &&
+        line.contains("failed to connect to server"))
+    {
+        // otherwise the retry loop looks like an endless "starting"
+        const QString reason = line.mid(line.indexOf("failed to connect to server") + 28).trimmed();
+        setStatus(tr("서버에 연결하지 못했습니다 (%1). 서버 PC의 실행 여부, 방화벽, 주소/포트(%2)를 확인하세요. 계속 재시도합니다.")
+                      .arg(reason, hostname() + ":" + QString::number(appConfig().port())));
+        return;
+    }
+
     if (line.contains("started server") ||
         line.contains("connected to server") ||
         line.contains("server status: active"))

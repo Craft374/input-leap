@@ -61,7 +61,7 @@ html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;backgrou
 <div id="app">
  <div id="bar"><span id="dot"></span><span id="st">연결 안 됨</span></div>
  <div id="warn">이 PC는 InputLeap 클라이언트입니다. 휴대폰 입력은 이 PC에만 적용됩니다. 마우스·키보드를 공유하는 서버 PC 주소로 다시 접속하세요.</div>
- <div id="pad"><span id="padhint">한 손가락: 이동 / 탭: 클릭<br>두 손가락 탭: 우클릭 / 두 손가락 드래그: 스크롤<br>두 손가락 오므리기·펼치기: 축소·확대 / 세 손가락 스와이프: 화면 전환<br>길게 누른 뒤 드래그: 끌기</span></div>
+ <div id="pad"><span id="padhint">한 손가락: 이동 / 탭: 클릭<br>두 손가락 탭: 우클릭 / 두 손가락 쓸기: 스크롤(관성)<br>두 손가락 오므리기·펼치기: 축소·확대 / 세 손가락 스와이프: 화면 전환<br>길게 누른 뒤 드래그: 끌기</span></div>
  <div id="kb">
   <div class="row"><input id="txt" type="text" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="입력할 내용"><button class="b" id="send">전송</button><button class="b" id="dir">직접 입력</button></div>
   <div class="hint" id="dirhint" style="display:none">직접 입력: 글자(단어)가 확정되면 바로 전송됩니다.</div>
@@ -183,7 +183,7 @@ function combo(mods,k){
 }
 // local state is reset whenever the server drops everything (rel / socket close)
 function resetLocal(){
-  MODS.forEach(function(k){modOn[k]=false});dragLock=false;held={};
+  moStop();MODS.forEach(function(k){modOn[k]=false});dragLock=false;held={};
   for(var i=0;i<mbs.length;i++)mbs[i].classList.remove('on');
   if(typeof endG==='function')endG(true);
   refreshMods();
@@ -219,6 +219,22 @@ function flush(){
   }
 }
 setInterval(flush,16);
+// Mac-like momentum: after a two-finger flick the scroll keeps gliding and decays (px/ms); any touch stops it
+var mo=null;
+function moStop(){mo=null}
+function moStart(vx,vy){
+  if(Math.hypot(vx,vy)<0.25)return;
+  mo={vx:vx,vy:vy,t:performance.now()};
+  requestAnimationFrame(moStep);
+}
+function moStep(now){
+  if(!mo)return;
+  var dt=Math.min(now-mo.t,50);mo.t=now;
+  scX+=mo.vx*dt;scY+=mo.vy*dt;
+  var k=Math.pow(0.94,dt/16);mo.vx*=k;mo.vy*=k;
+  if(Math.hypot(mo.vx,mo.vy)<0.03){mo=null;return}
+  requestAnimationFrame(moStep);
+}
 function endG(cancel){
   clearTimeout(g.timer);zoomEnd();
   if(g.mode==='one'&&g.drag&&cancel!==true)btn(0,0);
@@ -227,6 +243,7 @@ function endG(cancel){
 pad.addEventListener('touchstart',function(e){
   e.preventDefault();
   var n=e.targetTouches.length,c;
+  moStop();
   if(n===1&&g.mode==='idle'){
     var t=e.targetTouches[0];
     g={mode:'one',id:t.identifier,x:t.clientX,y:t.clientY,t0:Date.now(),dist:0,drag:false};
@@ -238,7 +255,7 @@ pad.addEventListener('touchstart',function(e){
     if(g.mode==='ignore')return;
     c=cen(e.targetTouches);
     if(g.mode==='two'){g.x=c.x;g.y=c.y;g.d=null;g.n=Math.max(g.n,n)}
-    else{clearTimeout(g.timer);g={mode:'two',x:c.x,y:c.y,t0:Date.now(),dist:0,n:n,d:null,pinch:0,pan:0,sx:0,sy:0,kind:'',fired:false,zacc:0}}
+    else{clearTimeout(g.timer);g={mode:'two',x:c.x,y:c.y,t0:Date.now(),dist:0,n:n,d:null,pinch:0,pan:0,sx:0,sy:0,kind:'',fired:false,zacc:0,vx:0,vy:0,lt:performance.now()}}
   }
 },{passive:false});
 pad.addEventListener('touchmove',function(e){
@@ -277,7 +294,11 @@ pad.addEventListener('touchmove',function(e){
         if(!g.zoomCtrl&&!modOn.Ctrl){send({t:'key',k:'Ctrl',d:1});g.zoomCtrl=true}
         send({t:'sc',dx:0,dy:z});   // fingers apart -> wheel up -> zoom in
       }
-    }else{scX+=dx;scY+=dy}
+    }else{
+      scX+=dx;scY+=dy;
+      var now=performance.now(),dt=now-g.lt;g.lt=now;
+      if(dt>0){g.vx=0.6*g.vx+0.4*dx/dt;g.vy=0.6*g.vy+0.4*dy/dt}
+    }
   }
 },{passive:false});
 function tEnd(e){
@@ -297,6 +318,7 @@ function tEnd(e){
     if(rem>=2){var c=cen(e.targetTouches);g.x=c.x;g.y=c.y;g.d=null}
     else{
       zoomEnd();
+      if(g.n<3&&g.kind!=='zoom'&&performance.now()-g.lt<80)moStart(g.vx,g.vy);
       if(cfg.tap&&g.n<3&&g.dist<10&&Date.now()-g.t0<350){click(1);buzz(10)}
       g={mode:'ignore'};
     }
